@@ -1,0 +1,854 @@
+﻿SignalDelta Backtesting Service — Architecture & Scoring Math Specification
+Version 1.0 DRAFT | February 8, 2026
+Canonical Position in Document Hierarchy
+SignalDelta Product Architecture (ROOT)
+├── API v2 Architecture
+├── Frontend v2 Design
+├── Master Signal Catalog (S001–S080)
+├── IALD Foundation v2 (20 families, 10 chain types)
+├── Family Coverage Gap Analysis
+├── Collector-Signal Reconciliation
+├── research.py Decomposition
+└── ▶ Backtesting Service Specification (THIS DOCUMENT)
+Relationship to the Four Pillars:
+* Score (Pillar 1): The backtesting service validates Score's output. Every scoring parameter — weights, half-lives, tiers, thresholds — must prove itself through backtesting before reaching production. Without backtesting, Score is an opinion. With it, Score is a tested hypothesis.
+* Cascade (Pillar 3): Chain type classification (CT-01 through CT-10) is backtestable. The spec includes chain probability outputs and per-chain-type metrics. When Cascade is built (v2.2), its classifiers run through this same service.
+* Tempo (Pillar 4): Contextual baselines change scoring behavior. Backtesting with and without Tempo measures Tempo's actual value (does it reduce false positives? does it improve lead time?). The scoring math in this spec defines the integration point.
+* Conductor (Pillar 2): Conductor executes positions based on Score + Cascade output. Backtesting the scoring layer is a prerequisite for backtesting Conductor's strategies — you can't evaluate a strategy built on scores you haven't validated.
+________________
+
+
+0) Why This Service Exists
+The platform today has 80 cataloged signals, 140+ collectors, a scorer in research.py that has diverged into three implementations, and a Conductor that trades real money based on scores it produces. None of these have been backtested against labeled events with formal evaluation metrics.
+The backtesting service answers one question: does our scoring system actually detect information asymmetry before material price moves, or does it just produce numbers?
+If the answer is "it works" — we have empirical proof of the platform's value proposition, calibrated confidence thresholds for Conductor, and a principled way to tune signal weights.
+If the answer is "it doesn't" — we find out before customers do, and we know exactly which signals, families, and chain types fail.
+Either answer is valuable. No answer is not.
+Goals
+1. Backtesting is a first-class service — not scripts, not notebooks, not a one-off analysis
+2. Backtests are deterministic — identical inputs produce identical outputs, always
+3. Scoring math is formal — auditable, reproducible, version-controlled
+4. Output is operator-consumable — explainability is not optional, it's structural
+________________
+
+
+1) Core Design Principles
+1.1 The Determinism Contract
+A backtest result is uniquely determined by exactly seven inputs. If any of these change, you are running a different backtest:
+Input
+	What It Pins
+	Example
+	dataset_snapshot_id
+	Immutable data snapshot
+	snap_equities_2025Q4
+	signal_engine_version
+	Code that generates signal events from raw data
+	2.3.1
+	signal_definitions_hash
+	Signal rules catalog (which signals, how they normalize)
+	sha256:a3f8...
+	scoring_model_id + scoring_model_hash
+	Weights, half-lives, tiers, family budgets
+	iald_v2_prod_2026_02
+	latency_model_id + latency_model_hash
+	Source delays & timestamp uncertainty
+	latency_v2_default
+	feature_schema_version
+	Shape of signal outputs / normalization functions
+	fs_v2
+	evaluation_protocol_id
+	Event labeling rules & metrics computed
+	proto_v2_event_and_fpr
+	These seven inputs form the run manifest. Every run stores its manifest as immutable metadata, and the manifest determines the run_hash. Two runs with identical manifests must produce identical run_hashes and identical metrics.
+1.2 Event-Time Simulation
+Backtesting simulates information availability — what the system could have known at time t — not what is in the database now.
+Every record used for scoring must carry four timestamps:
+Timestamp
+	Meaning
+	Example
+	event_time
+	When it occurred in the world
+	Board member resigned at 14:32 UTC
+	observed_time
+	When our collector observed it
+	EDGAR filing scraped at 14:35 UTC
+	ingest_time
+	When it landed in our database
+	Row inserted at 14:36 UTC
+	available_time
+	When the scoring engine is allowed to use it
+	Derived from latency model: 14:38 UTC
+	available_time is derived via a latency model (§7). This is critical: without it, backtests silently use future information. A backtest that uses ingest_time as availability will look better than reality because some collectors have multi-hour delays. A backtest that uses event_time is clairvoyant.
+Connection to existing architecture: Today's collectors (140+) populate event_time inconsistently. Some store it, some don't. The Collector-Signal Reconciliation doc identified 13 signals with existing collectors that aren't wired to the scorer — several of those collectors also lack clean event_time / observed_time separation. Fixing this is a prerequisite for meaningful backtesting.
+1.3 Pure Functions, No Side Effects
+Signal generation, scoring, and evaluation are pure transforms of immutable inputs:
+* No background refresh during a backtest run
+* No "if missing, call API" gap-filling
+* No mutable caches in the scoring path
+* No external network calls (see §22.2)
+The scoring engine that runs inside a backtest must be the same code that runs in production. The only difference is where the data comes from: production reads from live tables; backtesting reads from a frozen snapshot.
+Connection to research.py decomposition: The research.py decomposition spec extracts the scorer into a standalone scoring/engine.py module with no database side effects. That extracted scorer is the exact module used inside backtests. If the scorer can't be extracted cleanly enough to run against a snapshot, backtesting is impossible. These two efforts are coupled.
+________________
+
+
+2) Service Architecture
+2.1 Logical Services
+Service
+	Responsibility
+	Purity
+	Backtest Service
+	Orchestrates runs, stores artifacts, returns results
+	Stateful (manages jobs)
+	Snapshot Service
+	Creates & serves immutable dataset snapshots
+	Stateful (manages snapshots)
+	Signal Engine
+	Generates normalized signal events from snapshot data
+	Pure function
+	Scoring Engine
+	Converts signal events into per-entity scores over time
+	Pure function
+	Evaluation Engine
+	Computes metrics vs labeled events & non-event baselines
+	Pure function
+	Explainability Engine
+	Produces human-readable "why" for each detection
+	Pure function
+	These can be one process initially (and will be, for v2.0). The boundaries must exist in the code — separate modules with defined interfaces — even if they share a process. The research.py decomposition already defines the Scoring Engine boundary. The Signal Engine boundary maps to the signal extractor registry. The Evaluation Engine is new.
+2.2 Where Backtesting Lives in the API
+The API v2 Architecture places backtesting under the Signals domain:
+/api/v2/signals/backtest/*       (existing API v2 slot)
+/api/v2/backtests/*              (dedicated namespace — this spec)
+Decision: dedicated /api/v2/backtests/ namespace. Backtesting is large enough and cross-cutting enough (it touches Score, Cascade, and eventually Conductor) that nesting it under /signals/ understates its scope. The Product Architecture already identifies Score, Conductor, Cascade, and Tempo as top-level systems; backtesting is a cross-cutting validation layer over all four.
+The existing /signals/backtest route in the v1 API is a lightweight historical performance viewer. It stays as-is and becomes a consumer of this service's output.
+2.3 Execution Model
+Backtests are long-running operations (minutes to hours). They must not block API request handlers.
+POST /api/v2/backtests/runs → {run_id, status: "QUEUED"}
+                              │
+                              ▼
+                        ARQ Task Queue
+                              │
+                              ▼
+                    Backtest Worker Process
+                    ├── Load snapshot
+                    ├── Generate signal events (Signal Engine)
+                    ├── Compute scores (Scoring Engine)
+                    ├── Evaluate vs labeled events (Evaluation Engine)
+                    ├── Generate explanations (Explainability Engine)
+                    └── Store artifacts
+                              │
+                              ▼
+GET /api/v2/backtests/runs/{run_id} → {status: "COMPLETE", metrics: {...}}
+This uses the ARQ task queue already specified in the API v2 Architecture. Backtest workers are the same ARQ worker pool that handles report generation and cohort LLM matching — just a different task function.
+________________
+
+
+3) Entities, IDs, and Hashing
+3.1 Canonical IDs
+ID
+	Format
+	Source
+	entity_id
+	{ticker}:{exchange} or {token}:{chain}
+	Securities table
+	event_id
+	UUID or evt_{type}_{entity}_{date}
+	Labeled events table
+	signal_id
+	S### (S001–S080)
+	Master Signal Catalog
+	family_id
+	F## (F01–F20)
+	IALD Foundation v2
+	chain_type
+	CT-## (CT-01–CT-10)
+	IALD Foundation v2
+	snapshot_id
+	snap_{description}
+	Generated on creation
+	run_id
+	bt_{ULID}
+	Generated on submission
+	scoring_model_id
+	iald_{version}_{label}
+	User-defined
+	latency_model_id
+	latency_{version}_{label}
+	User-defined
+	protocol_id
+	proto_{version}_{label}
+	User-defined
+	3.2 Hashing Rules (Determinism Enforcement)
+All config payloads are hashed after:
+* Canonical JSON serialization (sorted keys, no whitespace)
+* Stable float formatting (decimal string, max 10 significant digits, no scientific notation)
+* Explicit nulls (do not omit optional keys)
+* Explicit default expansion (if a default exists, materialize it before hashing)
+Hash function: sha256(canonical_json_bytes) → hex string.
+Stored hashes: scoring_model_hash, latency_model_hash, signal_definitions_hash, protocol_hash.
+3.3 Randomness Policy
+Backtests must not use RNG. If Monte Carlo simulation is needed (latency perturbation, confidence interval estimation):
+* Explicit mode: simulation_mode=MONTE_CARLO
+* Explicit seed parameter
+* Result includes seed and trial count
+* Deterministic given seed + trials
+________________
+
+
+4) Data Contracts (I/O Schemas)
+4.1 Signal Event (output of Signal Engine)
+A signal event is a normalized, atomic piece of evidence that one of the 80 cataloged signals fired for a specific entity at a specific time.
+{
+  "signal_event_id": "uuid",
+  "entity_id": "AAPL:NASDAQ",
+  "signal_id": "S003",
+  "family_id": "F04",
+  "chain_affinity": ["CT-02", "CT-03"],
+  "event_time": "2026-01-15T14:32:10Z",
+  "observed_time": "2026-01-15T14:35:51Z",
+  "ingest_time": "2026-01-15T14:36:12Z",
+  "direction": "BULLISH",
+  "raw_strength": 2.73,
+  "strength_norm": 0.61,
+  "reliability": 0.84,
+  "source_type": "OPTIONS_TAPE",
+  "source_ref": { "vendor": "polygon", "id": "..." },
+  "tags": ["otm_calls", "sweep", "no_known_catalyst"],
+  "features": { "vol_oi_ratio": 9.3, "dte": 12, "otm_pct": 0.18 },
+  "version": {
+    "signal_engine_version": "2.3.1",
+    "signal_definition_hash": "sha256:..."
+  }
+}
+Key design note: strength_norm (normalized to [0,1]) is the only value the Scoring Engine must understand universally. raw_strength and features are optional but critical for explainability. The direction field is BULLISH, BEARISH, or NON_DIRECTIONAL — mapped to +1, -1, 0 in the scoring math.
+Connection to signal catalog: Each signal_id maps to the Master Signal Catalog (S001–S080). The family_id maps to one of the 20 families in IALD Foundation v2. The chain_affinity vector maps to the 10 cascade chain types. These are not abstract identifiers — they cross-reference existing specifications.
+4.2 Score Sample (output of Scoring Engine)
+A score sample is computed for one entity at one point in time. This is the backtest equivalent of what iald_scores stores in production.
+{
+  "entity_id": "AAPL:NASDAQ",
+  "asof_time": "2026-01-16T00:00:00Z",
+  "magnitude": 0.74,
+  "lean": -0.31,
+  "confidence": 0.68,
+  "chain_probs": {
+    "CT-02": 0.42,
+    "CT-03": 0.23,
+    "CT-07": 0.06,
+    "UNKNOWN": 0.29
+  },
+  "family_vector": {
+    "F01": 0.18,
+    "F02": 0.22,
+    "F04": 0.29,
+    "F09": 0.05
+  },
+  "top_contributors": [
+    {
+      "signal_id": "S033",
+      "family_id": "F02",
+      "contribution": 0.21,
+      "direction": "BEARISH",
+      "decayed_weight": 0.19,
+      "latency_conf": 0.95,
+      "reliability": 0.90,
+      "age_hours": 18.2
+    }
+  ],
+  "version": {
+    "scoring_model_id": "iald_v2_prod_2026_02",
+    "scoring_model_hash": "sha256:...",
+    "latency_model_id": "latency_v2_default",
+    "latency_model_hash": "sha256:..."
+  }
+}
+Mapping to existing system: The current production scorer outputs a single score (0–100) and a verdict (BUY NOW / BUY / NEUTRAL / SELL / SELL NOW). The backtesting score sample decomposes this into three orthogonal quantities:
+Backtest Output
+	Current Production Equivalent
+	What It Measures
+	magnitude [0,1]
+	Distance from 50 in the 0–100 score
+	How much evidence exists
+	lean [-1,+1]
+	Direction from 50 (bullish vs bearish)
+	Which direction the evidence points
+	confidence [0,1]
+	Not currently computed
+	How trustworthy the evidence is
+	The production 0–100 score can be reconstructed: score = 50 + (magnitude × lean × 50), clamped to [0,100]. But the decomposition is richer — magnitude and lean are independent axes, and confidence is a third dimension that production currently ignores.
+Assumption to challenge: The current production scorer uses tanh(value / saturation) for normalization. This spec uses logistic σ(k(M* - θ)) for magnitude mapping. These are not equivalent — the logistic has a tunable midpoint (θ) and steepness (k), which makes calibration easier. Switching the production scorer to the logistic formulation is an intentional upgrade, not a documentation inconsistency. But it means backtested scores will not match legacy production scores, which is fine — the whole point is to calibrate new parameters.
+4.3 Evaluation Result (output of Evaluation Engine)
+{
+  "run_id": "bt_2026_02_08_001",
+  "protocol_id": "proto_v2_event_and_fpr",
+  "metrics": {
+    "event_recall@threshold_0.7": 0.61,
+    "event_precision@threshold_0.7": 0.27,
+    "median_detection_lead_hours": 19.3,
+    "false_positive_rate_per_entity_per_30d": 0.042,
+    "calibration_brier": 0.18,
+    "auc_event_vs_nonevent": 0.74
+  },
+  "by_chain_type": { "CT-02": {...}, "CT-07": {...} },
+  "by_family": { "F01": {...}, "F04": {...} },
+  "by_regime": { "low_vix": {...}, "high_vix": {...} }
+}
+The by_chain_type, by_family, and by_regime breakdowns are critical — aggregate metrics hide signal-level dysfunction. A system with 0.74 AUC overall might have 0.90 AUC on insider trading (CT-02) and 0.45 AUC on pump-and-dump (CT-10). Those are different realities requiring different responses.
+________________
+
+
+5) Backtesting Service API (HTTP)
+Base URL: /api/v2/backtests
+Auth: Standard v2 auth (Firebase Bearer OR X-API-Key). Role-based permissions: backtest:run, backtest:read, snapshot:read, model:read.
+Tier gating: Backtesting is a Professional+ feature (not free or entry tier). This aligns with the API v2 entitlements model.
+5.1 Snapshot APIs (Determinism Foundation)
+Create Snapshot
+POST /api/v2/backtests/snapshots
+{
+  "name": "bt_equities_q4_2025",
+  "description": "Equities universe S&P1500, 2025-10-01..2026-01-31",
+  "universe": {
+    "type": "EQUITY",
+    "members": "SP1500",
+    "include_delisted": true
+  },
+  "time_range": {
+    "start": "2025-10-01T00:00:00Z",
+    "end": "2026-02-01T00:00:00Z"
+  },
+  "data_sources": {
+    "edgar": { "asof": "2026-02-01T00:00:00Z" },
+    "options": { "vendor": "polygon", "asof": "2026-02-01T00:00:00Z" },
+    "news": { "vendor": "newsapi", "asof": "2026-02-01T00:00:00Z" }
+  },
+  "freeze_rules": {
+    "no_external_fetch": true,
+    "dedupe_policy": "CANONICAL",
+    "timestamp_normalization": "UTC"
+  }
+}
+Response: { "snapshot_id": "snap_01HXYZ...", "snapshot_hash": "sha256:...", "status": "BUILDING" }
+Snapshot Status
+GET /api/v2/backtests/snapshots/{snapshot_id}
+Returns: counts per table/source, missingness report, integrity checks, snapshot hash.
+Snapshot Manifest (Critical for Reproducibility)
+GET /api/v2/backtests/snapshots/{snapshot_id}/manifest
+Must include: exact source versions, extraction queries, schema version, row counts, checksums per table partition. This is what makes a backtest reproducible in two years.
+5.2 Signal Generation APIs
+Build Signals for Snapshot
+POST /api/v2/backtests/signal-jobs
+{
+  "snapshot_id": "snap_01HXYZ",
+  "signal_engine_version": "2.3.1",
+  "signal_definitions_hash": "sha256:...",
+  "signals": {
+    "include": ["S003","S004","S033","S032","S006"],
+    "exclude": []
+  },
+  "output": {
+    "format": "PARQUET",
+    "partition_by": ["family_id","signal_id","date"]
+  }
+}
+Response: { "signal_job_id": "sj_01HABC", "status": "QUEUED" }
+Connection to signal catalog: The include list uses S### IDs from the Master Signal Catalog. The gap analysis shows that only ~12 of 80 signals are currently active in production scoring. The backtesting service provides the mechanism to test all 80 — including signals whose collectors are built but aren't wired to the scorer (the 13 identified in the Collector-Signal Reconciliation).
+Signal Job Status & Artifacts
+GET /api/v2/backtests/signal-jobs/{signal_job_id}
+GET /api/v2/backtests/signal-jobs/{signal_job_id}/artifacts
+Artifacts include: normalized signal events (Parquet), coverage/missingness report, latency stats per source (observed vs ingest deltas).
+5.3 Latency Model APIs
+Create/Version Latency Model
+POST /api/v2/backtests/models/latency
+{
+  "latency_model_id": "latency_v2_default",
+  "description": "Default latency + uncertainty by source_type",
+  "rules": [
+    {
+      "source_type": "EDGAR",
+      "availability": { "p50_seconds": 120, "p95_seconds": 600 },
+      "timestamp_uncertainty_seconds": 30,
+      "latency_confidence": 0.95
+    },
+    {
+      "source_type": "NEWS",
+      "availability": { "p50_seconds": 900, "p95_seconds": 7200 },
+      "timestamp_uncertainty_seconds": 600,
+      "latency_confidence": 0.65
+    },
+    {
+      "source_type": "DARK_POOL",
+      "availability": { "p50_seconds": 86400, "p95_seconds": 604800 },
+      "timestamp_uncertainty_seconds": 3600,
+      "latency_confidence": 0.55
+    },
+    {
+      "source_type": "OPTIONS_TAPE",
+      "availability": { "p50_seconds": 60, "p95_seconds": 300 },
+      "timestamp_uncertainty_seconds": 10,
+      "latency_confidence": 0.98
+    },
+    {
+      "source_type": "CONGRESSIONAL",
+      "availability": { "p50_seconds": 2592000, "p95_seconds": 3888000 },
+      "timestamp_uncertainty_seconds": 86400,
+      "latency_confidence": 0.30
+    },
+    {
+      "source_type": "ONCHAIN",
+      "availability": { "p50_seconds": 30, "p95_seconds": 180 },
+      "timestamp_uncertainty_seconds": 15,
+      "latency_confidence": 0.99
+    }
+  ],
+  "composition": {
+    "availability_time": "max(event_time + modeled_delay, ingest_time)",
+    "fallback_if_missing": "ingest_time"
+  }
+}
+Response: { "latency_model_id": "latency_v2_default", "latency_model_hash": "sha256:...", "created_at": "..." }
+Note on congressional latency: Congressional disclosure data has p50 latency of ~30 days (the STOCK Act allows 45-day reporting). This means congressional trading signals (S011–S014 in the catalog) can never provide sub-day detection lead time. The latency model makes this honest — the scorer can still use the signal, but the latency confidence is 0.30, which the scoring math discounts heavily.
+Get Latency Model
+GET /api/v2/backtests/models/latency/{latency_model_id}
+5.4 Scoring Model APIs
+Create Scoring Model
+POST /api/v2/backtests/models/scoring
+{
+  "scoring_model_id": "iald_v2_prod_2026_02",
+  "description": "Prod candidate: weights/tiers/half-lives + family budgets",
+  "signal_params": [
+    {
+      "signal_id": "S033",
+      "tier": "A",
+      "base_weight": 1.40,
+      "half_life_hours": 336,
+      "directional": true,
+      "family_id": "F02",
+      "chain_affinity": { "CT-07": 0.6, "CT-01": 0.4 }
+    },
+    {
+      "signal_id": "S003",
+      "tier": "B",
+      "base_weight": 1.20,
+      "half_life_hours": 48,
+      "directional": true,
+      "family_id": "F04",
+      "chain_affinity": { "CT-03": 0.5, "CT-02": 0.5 }
+    }
+  ],
+  "family_params": [
+    {
+      "family_id": "F04",
+      "budget_fpr_per_30d": 0.015,
+      "independence_penalty": { "F09": 0.85, "F10": 0.90 }
+    }
+  ],
+  "aggregation": {
+    "magnitude_link": "LOGISTIC",
+    "lean_method": "SIGNED_WEIGHTED_MEAN",
+    "confidence_method": "EVIDENCE_AND_LATENCY"
+  }
+}
+Response: { "scoring_model_id": "iald_v2_prod_2026_02", "scoring_model_hash": "sha256:..." }
+Connection to existing weights: The signal_params here correspond to SIGNAL_WEIGHTS, SIGNAL_HALF_LIVES, and SIGNAL_CONFIG currently imported from iald_scorer_v3.py. The 8-tier signal architecture (SignalTier in the current code) maps to the tier field. Making these parameters explicit in a scoring model config means they're versioned and hashable — you can run the same data through two different weight configurations and compare results without changing code.
+5.5 Evaluation Protocol APIs
+Define Protocol
+POST /api/v2/backtests/protocols
+{
+  "protocol_id": "proto_v2_event_and_fpr",
+  "labeling": {
+    "event_types": ["EARNINGS","MNA","SEC_ACTION","RUG_PULL","GOVERNANCE_COLLAPSE"],
+    "event_time_field": "announcement_time_utc",
+    "allow_multiple_events_per_entity": true
+  },
+  "windows": {
+    "detection_window_hours": 72,
+    "post_event_grace_hours": 12,
+    "nonevent_sampling_days": 90
+  },
+  "thresholds": {
+    "primary_magnitude_thresholds": [0.6, 0.7, 0.8],
+    "confidence_thresholds": [0.5, 0.7]
+  },
+  "metrics": [
+    "precision", "recall", "median_lead_time",
+    "fpr_per_entity_per_30d", "brier_score", "auc"
+  ],
+  "regimes": {
+    "equities": { "by_vix": [{ "name":"low", "max":18 }, { "name":"high", "min":25 }] },
+    "crypto": { "by_btc_vol": [{ "name":"calm", "max":0.03 }, { "name":"storm", "min":0.07 }] }
+  }
+}
+Response includes protocol_hash.
+Labeled events are the hardest prerequisite. The backtesting service is only as good as the labeled events it evaluates against. We need a curated dataset of material events — earnings surprises, M&A announcements, SEC enforcement actions, crypto rug pulls, governance collapses — with precise timestamps. This is a data curation task, not a software engineering task, and it needs to happen in parallel with service development.
+5.6 Run Backtest APIs (The Core)
+Create Backtest Run
+POST /api/v2/backtests/runs
+{
+  "run_name": "bt_equities_q4_2025_prod_candidate",
+  "snapshot_id": "snap_01HXYZ",
+  "signal_job_id": "sj_01HABC",
+  "scoring_model_id": "iald_v2_prod_2026_02",
+  "latency_model_id": "latency_v2_default",
+  "evaluation_protocol_id": "proto_v2_event_and_fpr",
+  "simulation": {
+    "mode": "DETERMINISTIC",
+    "asof_grid": { "step": "1h" },
+    "availability_policy": "EVENT_TIME_WITH_LATENCY"
+  },
+  "filters": {
+    "entities": { "max": 3000, "type": "EQUITY" },
+    "signals": { "include_families": ["F01","F02","F04","F09"] }
+  },
+  "outputs": {
+    "store_time_series": true,
+    "store_explanations": true,
+    "store_intermediate_contributions": true
+  }
+}
+Response: { "run_id": "bt_01J0...", "run_hash": "sha256:...", "status": "QUEUED" }
+Run Status
+GET /api/v2/backtests/runs/{run_id}
+Score Time Series
+GET /api/v2/backtests/runs/{run_id}/scores?entity_id=AAPL:NASDAQ
+Explanations
+GET /api/v2/backtests/runs/{run_id}/explanations?entity_id=AAPL:NASDAQ&asof=2026-01-16T00:00:00Z
+Evaluation Metrics
+GET /api/v2/backtests/runs/{run_id}/evaluation
+Artifacts Manifest
+GET /api/v2/backtests/runs/{run_id}/artifacts
+Must include: all input hashes, partition checksums, schema versions, environment info (Python version, deterministic BLAS flags if relevant).
+________________
+
+
+PART B — Formal Scoring Math
+This section defines the exact mathematics of the Scoring Engine. Every equation, every parameter, every boundary condition. The production scorer and the backtest scorer must implement the same math — the extracted scoring/engine.py from the research.py decomposition is the single implementation that both use.
+6) Notation
+For a given entity e at asof time t:
+Signal events are indexed by i ∈ I(e,t) — the set of events relevant to entity e and available by time t.
+Each event carries:
+Symbol
+	Meaning
+	Range
+	s(i)
+	signal_id
+	S001–S080
+	f(i)
+	family_id
+	F01–F20
+	τ_i
+	event_time
+	timestamp
+	a_i
+	available_time (after latency model)
+	timestamp
+	x_i
+	normalized strength (strength_norm)
+	[0, 1]
+	d_i
+	direction
+	{-1, 0, +1}
+	r_i
+	reliability (intrinsic data quality)
+	[0, 1]
+	ℓ_i
+	latency_confidence (source-based)
+	[0, 1]
+	w_s
+	base weight for signal s
+	> 0
+	h_s
+	half-life (hours) for signal s
+	> 0
+	Only events with a_i ≤ t are included. Event age: Δ_i = (t - τ_i) in hours.
+7) Decay Function
+Half-life decay is exponential:
+λ_i = 2^(-Δ_i / h_{s(i)})
+Properties: if Δ = h → λ = 0.5; if Δ = 0 → λ = 1; smooth, monotone decreasing.
+No floor recommended. Let half-life do its job — if a signal's half-life is 48 hours, it contributes 25% at 96 hours and 6.25% at 192 hours. That's appropriate behavior.
+Connection to existing code: The current _time_decay() in research.py implements 2^(-age_hours / half_life), which is identical. The half-life values come from SIGNAL_HALF_LIVES in iald_scorer_v3.py. This spec formalizes what already exists.
+8) Effective Evidence Weight per Event
+Evidence shrinks when reliability is low, latency confidence is low, or family-level penalties apply:
+α_i = w_{s(i)} · λ_i · r_i · ℓ_i · π_{f(i)}(t)
+Where π_f(t) is a family-level penalty factor in (0, 1] encoding:
+* Independence penalties (correlated families)
+* Budget enforcement (chatty families producing too many false positives)
+* Regime dampening (e.g., high VIX reduces options evidence weight)
+If not yet implemented, set π_f(t) = 1 and add later.
+Connection to existing code: The current _apply_correlation_discounts() and _calculate_independence_score() in research.py are primitive versions of the family penalty factor. They discount correlated signals within the same cluster by 50%. This spec generalizes that mechanism into π_f(t).
+9) Magnitude (Evidence Strength)
+Magnitude answers: "How much evidence exists?" Range: [0, 1].
+Step 1 — Raw magnitude sum:
+M* = Σ_{i ∈ I(e,t)} α_i · x_i
+Step 2 — Map to [0, 1] via logistic link (recommended):
+M = σ(k(M* - θ)) = 1 / (1 + e^{-k(M* - θ)})
+* k controls steepness (sensitivity). Higher k → sharper threshold.
+* θ is baseline offset — how much raw evidence is needed for M = 0.5.
+The logistic is preferred over exponential saturation (1 - e^{-M*/β}) because it's easier to calibrate against threshold crossings, and it produces well-behaved gradients for parameter tuning.
+Calibration note: k and θ are the first parameters to tune via backtesting. Start with k=2.0, θ=1.5, and adjust based on the FPR and recall tradeoff from evaluation runs.
+10) Lean (Directional Tilt)
+Lean answers: "Which direction does the evidence point?" Range: [-1, +1].
+* +1 = strongly bullish
+* -1 = strongly bearish
+* 0 = balanced or non-directional evidence
+Directional numerator:
+L* = Σ_{i ∈ I(e,t)} α_i · x_i · d_i
+Directional denominator (only directional evidence counts):
+Z = Σ_{i ∈ I(e,t)} α_i · x_i · |d_i|
+Lean:
+Lean = 0              if Z < ε
+     = L* / Z         otherwise
+Choose small ε (like 1e-6). If all evidence is non-directional → lean = 0.
+11) Confidence (Do We Trust the Score?)
+Confidence is not magnitude. Magnitude says "how much evidence." Confidence says "how trustworthy is that evidence, and is it temporally well-ordered."
+Three components, combined multiplicatively:
+11.1 Evidence Quality Confidence (C_q)
+Weighted mean of reliability + latency:
+C_q = Σ_i (α_i · x_i) / (Σ_i (w_{s(i)} · λ_i · x_i) + ε)
+High when surviving evidence is reliable and low-latency. Drops when lots of weight had to be discounted due to poor reliability or uncertain timestamps.
+11.2 Diversity / Independence Confidence (C_d)
+If all evidence is from one family, trust it less than multi-family agreement.
+Compute family contributions:
+m_f = Σ_{i: f(i)=f} α_i · x_i
+Normalize:
+p_f = m_f / (Σ_f m_f + ε)
+Effective family count via entropy:
+H = -Σ_f p_f · log(p_f + ε)
+Normalize:
+C_d = H / log(F_max)
+Where F_max = 20 (our family count). So C_d ∈ [0, 1]. One-family evidence → low diversity confidence. Broad evidence spread → higher confidence.
+Connection to existing code: The current _calculate_independence_score() returns an independence multiplier based on active cluster count (1.0 / 1.05 / 1.15 / 1.25). The entropy-based C_d is a continuous generalization of that step function.
+11.3 Temporal Ordering Confidence (C_t)
+Matters for cascade sequencing and chain typing. If key signals have overlapping timestamp uncertainty, sequencing confidence drops.
+For event i, define timestamp uncertainty u_i (seconds) from latency model. Interval: [τ_i - u_i, τ_i + u_i].
+Among top-K contributors (K=10), count ambiguous pairs (those with overlapping intervals):
+C_t = 1 - (# ambiguous pairs) / (# total pairs)
+So C_t ∈ [0, 1].
+11.4 Combine Confidence Components
+Confidence = clip(C_q^a · C_d^b · C_t^c, 0, 1)
+Default exponents:
+Component
+	Exponent
+	Rationale
+	a (quality)
+	0.6
+	Quality matters most — unreliable data is worse than sparse data
+	b (diversity)
+	0.25
+	Multi-family agreement is meaningful but not dominant
+	c (temporal)
+	0.15
+	Temporal ordering matters for chain typing, less for raw detection
+	These exponents are tunable but should remain stable across backtest runs (include in scoring_model config).
+12) Chain Type Probabilities (CT-##)
+Each signal carries a chain affinity vector A_s(CT) that sums to 1 over chain types it supports (or ≤ 1 if open-world).
+Per event: q_{i,ct} = α_i · x_i · A_{s(i)}(ct)
+Aggregate: Q_{ct} = Σ_i q_{i,ct}
+Convert to probabilities via softmax with temperature T:
+P(ct) = e^{Q_{ct}/T} / Σ_{ct'} e^{Q_{ct'}/T}
+Smaller T → more peaky (more confident chain typing). Larger T → flatter (less sure).
+UNKNOWN bucket (honest uncertainty):
+P_final(ct) = (1 - γ) · P(ct)
+P_final(UNKNOWN) = γ
+
+
+where γ = 1 - Confidence
+If confidence is 0.68, UNKNOWN gets 0.32.
+Connection to Cascade (Pillar 3): This is the mathematical specification for what Cascade will compute. When Cascade is built (v2.2), it implements this math. Backtesting validates it before it reaches production. The 10 chain types (CT-01 through CT-10) are already defined in IALD Foundation v2.
+13) Family Budget Enforcement (False Positive Control)
+This stops "chatty families" from dominating.
+Let B_f = target budget (allowed fraction of entities exceeding threshold per 30 days).
+During calibration/backtest, compute realized FPR for family f: FPR_f.
+Penalty factor:
+π_f = min(1, (B_f / (FPR_f + ε))^η)
+If FPR_f is too high, π_f < 1 and evidence from that family is damped. η controls strength (start with 0.5).
+Critical constraints:
+* In backtests: π_f is computed from training period, then fixed for evaluation period (no leakage)
+* In production: π_f can update slowly (weekly) but never inside a single scoring run
+14) Cross-Family Independence Penalties
+If two families are empirically correlated, their "agreement" shouldn't multiply confidence like independent evidence.
+Maintain correlation matrix ρ(f,g) ∈ [0,1] (1 = fully redundant).
+Compute redundancy factor:
+R_f = Σ_{g ≠ f} ρ(f,g) · p_g
+Then:
+π_f = 1 - κ · R_f     (κ ∈ [0,1])
+This reduces effective weight of evidence from families redundant with what is already firing.
+Connection to existing code: The current SIGNAL_CORRELATION_CLUSTERS in iald_scorer_v3.py defines static clusters (options, insider, sentiment, etc.). The correlation matrix ρ(f,g) is a continuous, empirically calibrated generalization of those static clusters. Backtesting produces the data to compute ρ.
+15) Explainability Outputs (Deterministic)
+Every score sample is accompanied by:
+Top-N contributors (already shown in the Score Sample schema).
+Counterfactual deltas — for each top contributor j, remove it and recompute:
+ΔM_j = M - M_{\j}        (magnitude change without signal j)
+ΔLean_j = Lean - Lean_{\j} (lean change without signal j)
+This makes operator-facing explanations factual and deterministic. "Removing the board resignation cluster drops magnitude from 0.74 to 0.49" is auditable. "The model thinks something is going on" is not.
+________________
+
+
+PART C — Implementation Requirements
+16) Required Module Boundaries
+Module
+	Inputs
+	Outputs
+	Side Effects
+	signal_normalization
+	Raw collector outputs
+	strength_norm, reliability, direction
+	None (pure)
+	latency_model
+	Event timestamps + source config
+	available_time, latency_conf, timestamp uncertainty
+	None (pure)
+	scoring_engine
+	Signal events + scoring model config
+	Score samples (magnitude, lean, confidence, chain_probs)
+	None (pure)
+	evaluation_engine
+	Score samples + labeled events + protocol
+	Metrics (precision, recall, lead time, FPR, AUC, Brier)
+	None (pure)
+	artifact_store
+	Manifests, checksums, Parquet files
+	Immutable stored artifacts
+	Writes to storage
+	These map directly to the research.py decomposition:
+* signal_normalization = the signal extractor registry (42 extractors → per-signal normalization)
+* scoring_engine = the extracted scoring/engine.py
+* latency_model = new module (does not exist today)
+* evaluation_engine = new module (does not exist today)
+* artifact_store = snapshot management (new)
+17) Operational Guarantees
+17.1 Reproducibility Test (Must Exist in CI)
+A CI test that:
+1. Runs backtest A
+2. Reruns identical backtest A
+3. Asserts: identical run_hash, identical metrics, identical top contributors for sampled entities
+This is a non-negotiable acceptance criterion for the service.
+17.2 No External Calls Policy
+During a backtest run: outbound network calls are forbidden. Any attempt fails the run immediately.
+This alone prevents 30 kinds of nondeterminism.
+________________
+
+
+18) Concrete Example (End-to-End)
+Backtest request references:
+* snapshot: snap_equities_2025Q4
+* signals: S003, S033, S032, S013
+* scoring: iald_v2_prod_2026_02
+* latency: latency_v2_default
+* protocol: proto_v2_event_and_fpr
+The output for AAPL at 2026-01-16 00:00Z:
+* magnitude: 0.74
+* lean: -0.31
+* confidence: 0.68
+* chain_probs: CT-07 0.42, CT-02 0.19, UNKNOWN 0.32
+* top contributors: board resignation cluster, CFO departure, afterhours anomaly, options volume spike
+Counterfactual:
+* Removing board resignations drops magnitude to 0.49
+* Removing options spike changes lean from -0.31 to -0.12
+This is the kind of output humans trust.
+________________
+
+
+19) Minimal v2.0 Implementation Plan
+If you want the smallest slice that makes backtesting real — before Cascade, before Tempo, before full Parquet pipelines:
+Step
+	What
+	Dependency
+	Effort
+	1
+	Snapshot manifest + hashing
+	Postgres snapshot tables
+	2-3 days
+	2
+	Signal events normalized to a single schema
+	Signal extractor registry from research.py decomposition
+	3-5 days
+	3
+	Scoring engine implementing §7–§11
+	Extracted scorer from research.py
+	3-5 days
+	4
+	Labeled events dataset (EARNINGS, MNA, SEC_ACTION)
+	Manual curation + SEC/Polygon data
+	5-10 days
+	5
+	Evaluation protocol: recall, precision, lead time, FPR
+	New module
+	3-5 days
+	6
+	Explainability: top contributors + counterfactual deltas
+	Part of scoring engine
+	2-3 days
+	7
+	API endpoints + ARQ integration
+	API v2 infrastructure
+	2-3 days
+	Everything else (Parquet output, chain type classification, regime-conditional evaluation, family budget enforcement, Monte Carlo mode) iterates after the core loop works.
+Critical dependency: Steps 2 and 3 depend on the research.py decomposition producing a standalone scorer and signal extractor registry. These are sequential, not parallel. Decompose research.py first, then wire the extracted modules into the backtesting service.
+________________
+
+
+20) Build Sequence Alignment
+Platform Version
+	Backtesting Capability
+	v2.0 (current target)
+	Core backtesting: magnitude + lean + confidence + top contributors + counterfactual deltas. Evaluation against labeled events. No chain typing, no Tempo adjustment, no family budgets.
+	v2.1 (+ Tempo)
+	Backtesting with and without Tempo context. A/B comparison: does Tempo reduce FPR? Does it improve lead time?
+	v2.2 (+ Cascade)
+	Chain type classification backtesting. Per-chain-type metrics. Full chain_probs output.
+	v2.3 (full integration)
+	Conductor strategy backtesting. PnL simulation. Full family budget calibration.
+	________________
+
+
+Appendix A — Deterministic Numeric Rules
+* Use IEEE float64 internally
+* When hashing config, serialize floats as decimal strings with max 10 significant digits, no scientific notation
+* When storing results: keep float64 raw; present rounded to 4 decimals in UI
+Appendix B — Common Footguns Checklist
+* Backtest calling external APIs "to fill gaps"
+* Using DB "current state" rather than snapshot partitions
+* Timezone ambiguity (local times sneaking in)
+* Non-versioned normalization functions
+* "Minor" weight tweaks without protocol rerun
+* Computing latency from observed distributions but updating mid-backtest
+* Implicit defaults not materialized before hashing
+* Hidden randomness in sampling (must be seed + logged)
+* Evaluation using event_time as signal availability (clairvoyance)
+* Not separating train/calibration period from evaluation period for family budgets
+Appendix C — Differences from Current Production Scorer
+Aspect
+	Current Production
+	Backtesting Spec
+	Migration Path
+	Score range
+	0–100 with midpoint 50
+	magnitude [0,1] + lean [-1,+1] + confidence [0,1]
+	Production reconstructs legacy score from 50 + (M × L × 50)
+	Normalization
+	tanh(value / saturation)
+	Logistic σ(k(M* - θ))
+	Switch production to logistic; tune k and θ via backtest
+	Independence
+	Static cluster discounts (50% penalty)
+	Entropy-based C_d + correlation matrix ρ(f,g)
+	Backtest produces ρ; replace static clusters
+	Decay
+	2^(-age/half_life) (identical)
+	2^(-Δ/h) (identical)
+	No change needed
+	Confidence
+	Not computed (implicit in signal count)
+	Formal 3-component confidence
+	New capability
+	Family budgets
+	Not implemented
+	FPR-based penalty π_f
+	New capability
+	Explainability
+	Signal list with ±points
+	Counterfactual deltas ΔM, ΔLean
+	New capability
+	________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

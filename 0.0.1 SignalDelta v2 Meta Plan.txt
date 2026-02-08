@@ -1,0 +1,615 @@
+﻿SignalDelta v2 — Meta-Plan: How to Build All the Plans
+Version 1.0 DRAFT | February 8, 2026
+________________
+
+
+What This Document Is
+This is not an implementation plan. This is a plan for creating implementation plans. Each section describes a logical area of the platform, what decisions must be made before planning it, what dependencies exist between sections, and what the detailed plan for that section must contain.
+The output of executing this meta-plan is a set of concrete, ordered implementation plans — each with pseudo-code, module boundaries, data contracts, and acceptance criteria — that can be executed sequentially.
+Governing Decisions (Already Made)
+1. No data migration. v1 data is reference material, not an import source. All data is regenerated.
+2. One database schema, two locations. A single Postgres schema deployed to both AWS and offsite. Both instances are read/write for all tables. ETL is responsible for data consistency between them. Cross-joins work everywhere.
+3. Ubuntu. All environments.
+4. Python venvs. No Docker for application deployment (Docker optional for ancillary services only).
+5. 1TB disk at the offsite location.
+6. LLMs are split by weight class. Lightweight models (GPT-4o-mini, Haiku, Gemini Flash) are available via cloud APIs from any location. Heavy models (local 70B+, reasoning models) are offsite only. The LLM Gateway routes by use-case, and use-cases are mapped to model weight classes.
+7. Four pillars (Score, Conductor, Cascade, Tempo) ship incrementally per the product architecture build sequence.
+________________
+
+
+Global Invariants
+These rules are constitutional. They apply to every plan (P01–P16) and cannot be violated by any individual plan's design decisions. If a plan cannot satisfy an invariant, the plan is incomplete.
+Determinism
+Given identical inputs (snapshot_id + signal_definitions_hash + scoring_model_hash + latency_model_hash + evaluation_protocol_hash + environment_hash), a backtest run MUST produce byte-identical metrics and artifacts on repeated execution.
+There shall be no hidden randomness, no implicit data refresh, no implicit external API calls inside any scoring or evaluation path. If Monte Carlo is used, it must be explicit-mode with a stored seed.
+CI enforcement: A deterministic re-run test must exist. Run backtest A, re-run backtest A, assert identical run_hash, identical metrics, identical sample score vectors and top contributors. Build fails on mismatch.
+Immutability
+The following objects are immutable once created: snapshots, backtest runs, scoring models, latency models, evaluation protocols, labeled event datasets, and artifacts. Any change produces a new version identifier and hash. Mutation-in-place of historical results is prohibited.
+Time Semantics
+All time-bearing records MUST include event_time, observed_time, and ingest_time. Backtesting operates on available_time, derived via the latency model. No plan may rely on "current database state" without explicit time scoping. All timestamps are UTC, stored as TIMESTAMPTZ.
+No Hidden I/O in Scoring or Backtesting
+The scoring engine and backtesting engine are pure functions of their inputs. They must not query external APIs, must not fetch missing data during execution, must not depend on mutable runtime state. If required data is absent, the run fails explicitly — it does not silently degrade.
+LLM Determinism Guardrail
+LLM outputs may be used for summarization, classification (if cached), and explanation generation. LLM outputs may NOT modify scoring math, signal thresholds, or evaluation metrics. If LLM output is used as an input to any scored or backtested pipeline, it must be stored as a versioned artifact, be hashable, and be snapshot-frozen before scoring consumes it.
+Version & Hash Discipline
+Every plan must define: a version identifier scheme, a canonical serialization strategy, a hashing strategy, and artifact manifest boundaries. If a plan cannot define its version boundary, it is not implementation-ready.
+Mandatory Artifact Manifest
+Every backtest run must generate a manifest including: snapshot ID+hash, scoring model ID+hash, latency model ID+hash, evaluation protocol ID+hash, signal definitions hash, input artifact checksums, partition checksums, and environment hash. Backtests without a complete manifest are invalid.
+________________
+
+
+The Database Architecture
+Single Schema, Two Instances, ETL-Synchronized
+One Postgres schema deployed identically to both AWS and offsite. Both instances are full read/write. ETL processes keep them synchronized. This is simpler than sharding and preserves cross-joins everywhere.
+┌────────────────────┐              ┌────────────────────┐
+│  AWS Postgres       │    ETL      │ Offsite Postgres    │
+│  (full schema)      │◄──────────►│  (full schema)      │
+│                     │   sync      │                     │
+│  All tables r/w     │             │  All tables r/w     │
+│                     │             │                     │
+│  Primary consumer:  │             │  Primary consumer:  │
+│  API server,        │             │  Collectors, scorers│
+│  frontend requests  │             │  backtests, heavy   │
+│                     │             │  compute, local LLMs│
+└─────────┬──────────┘              └─────────┬──────────┘
+          │                                    │
+    ┌─────▼─────┐                        ┌─────▼─────┐
+    │ API Server │                        │ Workers   │
+    │ (user-     │                        │ (scoring, │
+    │  facing)   │                        │  collect, │
+    │            │                        │  backtest)│
+    └───────────┘                        └───────────┘
+What the logical single-writer rule guarantees:
+Each table group has a designated write home. Application code MUST route writes exclusively to that home instance. The other instance receives updates via asynchronous replication (Postgres logical replication or CDC). Both instances can read all tables; only the designated home accepts writes for a given table group.
+Table Group
+	Write Home
+	Rationale
+	Users, configs, subscriptions, watchlists, alerts, API keys, custom cohorts, tracking
+	AWS
+	User-facing writes originate from API requests
+	Signals, scores, score history, collector data, research reports, research progress
+	Offsite
+	Written by collectors, scorers, and report generators
+	Backtest snapshots, runs, artifacts, labeled events
+	Offsite
+	Written by backtest workers
+	Cascade events, Tempo baselines
+	Offsite
+	Written by intelligence services
+	Conductor strategies
+	AWS
+	User-created via API
+	Conductor executions, positions
+	Offsite
+	Written by execution workers
+	Securities (reference data)
+	Offsite
+	Written by ticker management / collector discovery
+	LLM routing config, tier entitlements
+	AWS
+	Admin-managed platform config
+	Enforcement (defined in P01/P02):
+* Application-level write pool selection (the database module exposes write_pool(table_group) and read_pool())
+* Optional Postgres role permissions (the replication user has read-only grants on non-home tables)
+* Conflict detection logging (if a write arrives at the non-home instance, it is logged as an anomaly)
+* ETL lag monitoring (P15a deliverable)
+Replication direction is per-table-group, not bidirectional. AWS → Offsite for user tables. Offsite → AWS for data tables. This eliminates the conflict scenario entirely for well-behaved application code. The only remaining risk is a bug that writes to the wrong instance, which is caught by conflict detection logging.
+ID strategy: ULID (or UUIDv7) for any table that participates in replication. Serial integers permitted only for strictly single-writer reference tables (e.g., tier_entitlements) that are never created on the non-home instance, and must be explicitly documented in P01.
+Plan-Making Instructions for the Database Section
+When you build the detailed database plan (P01), it must contain:
+1. Complete table registry — every table, with DDL, indexes, and constraints
+2. ETL sync strategy — which mechanism (logical replication, custom sync, CDC), what latency guarantees, conflict resolution rules
+3. Primary-write designation per table group — which instance is the "home" for each table group (even though both are r/w, designating a primary simplifies conflict reasoning)
+4. Connection pool configuration — pool sizes, timeouts, health checks (one pool per instance per consuming process)
+5. Schema creation scripts — psql < schema.sql creates a complete empty database at either location
+6. Backup strategy — per-instance (AWS: managed RDS snapshots; offsite: pg_dump or WAL archiving)
+7. Schema migration tooling — how schema changes are applied to both instances in sync (Alembic, raw SQL migrations, or similar)
+Dependencies from this section: Every other plan depends on the table registry and the schema. Nothing else can be finalized until P01 is done.
+________________
+
+
+Section Plan Registry
+Below are all the plans that need to be created, in dependency order. Plans that depend on earlier plans cannot be started until their dependencies are at least drafted.
+Layer 0: Foundation (no dependencies)
+├── P01: Database Schema & DDL
+├── P02: Environment & Deployment Tooling
+│
+Layer 1: Core Services (depends on Layer 0)
+├── P03: Auth & Entitlements Service
+├── P04: LLM Gateway Service
+├── P05: Background Task Infrastructure
+├── P15a: Minimum Observability (gating — must complete before P05, P06, P09)
+│
+Layer 2: Data Pipeline (depends on P01)
+├── P06: Collector Framework v2
+├── P07: Signal Normalization & Extractor Registry
+│
+Layer 3: Scoring (depends on P06, P07)
+├── P08: Scoring Engine (Pillar 1 Core)
+├── P09a: Labeled Event Registry & Ground Truth
+├── P09: Backtesting Service (depends on P08 and P09a)
+│
+Layer 4: Intelligence (depends on P08)
+├── P10: Tempo Service (Pillar 4)
+├── P11: Cascade Service (Pillar 3)
+│
+Layer 5: Action (depends on P08, optionally P10/P11)
+├── P12: Conductor Service (Pillar 2)
+│
+Layer 6: Presentation (depends on Layer 1, Layer 3)
+├── P13: API v2 Route Layer
+├── P14: Frontend v2
+│
+Layer 7: Operations
+├── P15b: Full Observability (expanded monitoring, dashboards)
+└── P16: Report Generation Pipeline
+________________
+
+
+P01: Database Schema & DDL
+What This Plan Must Contain
+1. Complete table inventory — every table, with DDL, indexes, and constraints
+2. CREATE TABLE statements for the full schema (one schema, deployed to both instances)
+3. Enum types and shared constants (signal tiers, verdict types, subscription tiers)
+4. ETL sync design: mechanism (logical replication, CDC, or custom), latency targets, conflict resolution
+5. Primary-write designation per table group (even though both are r/w, designating a "home" instance simplifies conflict reasoning: user tables → AWS primary, data tables → offsite primary)
+6. Connection pool configuration for each consuming process (API server, workers)
+7. Schema versioning approach (how to track which schema version is deployed, how to apply migrations to both instances)
+8. Seed data scripts (subscription tiers, default configs, system cohort definitions)
+Key Decisions to Make During Planning
+* ULIDs as default. Any table that participates in cross-instance replication uses ULIDs for primary keys. Serial integers are permitted only for documented single-writer reference tables that never replicate. This is a hard rule from the Global Invariants.
+* Timestamp handling convention. All timestamps UTC, stored as TIMESTAMPTZ. No exceptions. (Global Invariant: Time Semantics.)
+* Soft delete vs hard delete. Current system mixes both. Pick one and be consistent.
+* Replication mechanism. Postgres logical replication is the simplest option for the single-writer-per-table-group model. Each table group replicates in one direction only. The plan must define publication/subscription sets for each direction (AWS→Offsite, Offsite→AWS).
+* Write routing implementation. The database module must expose write_pool(table_group) that enforces the designated write home. A write to the wrong instance is a bug, not a conflict to resolve.
+Dependencies
+None. This is Layer 0.
+What Must Be True When This Plan Is Done
+* A fresh psql < schema.sql on either instance creates a complete, working empty system
+* Every table has a designated write home, documented in the table registry
+* The replication topology is defined: which publications, which subscriptions, which direction
+* Write routing is enforced in application code (not advisory)
+* ULID generation is standardized (library choice, import pattern)
+________________
+
+
+P02: Environment & Deployment Tooling
+What This Plan Must Contain
+1. Repository structure — monorepo vs multi-repo decision, directory layout
+2. Python venv management — creation, activation, requirements.txt vs pyproject.toml, pinned versions
+3. Two deployment targets:
+   * AWS: API server + frontend static files + user database
+   * Offsite: collectors + scoring workers + backtesting workers + data database + LLM consumers
+4. Frontend build & deploy — Vite build, static file hosting (nginx or S3+CloudFront)
+5. Process management — systemd units for API server (gunicorn+uvicorn), ARQ workers, collector scheduler
+6. Environment variable management — .env files, secrets handling, per-environment configs
+7. Disk layout for the offsite 1TB — partitioning strategy (how much for Postgres data, how much for collector cache, how much for backtest artifacts)
+8. Network topology — how AWS and offsite communicate (VPN, SSH tunnel, WireGuard), which ports, which direction connections flow
+9. LLM endpoint inventory — which models are available where, and the network path to each:
+   * Cloud APIs (reachable from both locations): GPT-4o-mini, Haiku, Gemini Flash
+   * Offsite local models (reachable only from offsite): heavy reasoning/generation models
+   * The API server's LLM Gateway must know which use-cases can be served from AWS (cloud-only models) and which require offsite routing
+Key Decisions to Make During Planning
+* Monorepo. The current codebase is a monorepo. Stay monorepo. The alternative (separate repos for API, frontend, collectors, scoring) creates coordination overhead that doesn't justify itself at this team size.
+* The LLM weight-class routing. Three classes of LLM use-cases emerge:
+   * Light (cloud OK): jargon explanation, cohort matching, quick classification → 4o-mini, Haiku, Gemini Flash. Callable from any location.
+   * Heavy (offsite only): report generation, deep research, score narrative, static HTML/CSS rendering → local 70B+ models. Only callable from offsite workers.
+   * The API server must not call heavy models directly if the API runs in AWS. Heavy LLM use-cases must be dispatched as background tasks (ARQ) that execute on offsite workers. This is already the architecture for report generation (it's a background task), but the plan must verify that no request handler synchronously calls a heavy model.
+* Where does the API server run? Given that ETL syncs both database instances, the API server can run in AWS (close to users, reads from local Postgres, light LLM calls go to cloud APIs, heavy work dispatched to offsite workers). This is the natural split. The plan must confirm this and ensure the task queue (Redis/ARQ) is reachable from both locations.
+Assumption to Challenge
+You said "easy to deploy frontend along with all needed components." The current frontend is a React+Vite SPA that builds to static files. Deploying it is npm run build and copying the dist/ folder to a web server. That's already easy. The harder question is the full request chain: browser → CDN/nginx (static files) → API server (AWS) → Postgres (AWS, synced from offsite) for most requests, with heavy compute dispatched to offsite workers that write results back to offsite Postgres (synced to AWS). The plan must trace the full round-trip for representative requests: "user loads research page for AAPL" (reads score from local PG), "user triggers new report" (API enqueues task → offsite worker generates → writes to offsite PG → ETL syncs to AWS → user polls for result).
+Dependencies
+None. This is Layer 0. But it informs every subsequent plan (they all need to know where code runs).
+What Must Be True When This Plan Is Done
+* A new Ubuntu box can go from bare metal to running the full platform via a documented, repeatable process
+* The deploy process for frontend changes is < 5 minutes
+* The deploy process for backend changes is < 10 minutes
+* Environment-specific configuration is externalized (not hardcoded)
+* Exact Python version is pinned and documented
+* pip freeze is captured per deployment and stored as an artifact
+* An environment_hash (Python version + pinned dependencies) is computed per deployment and available to the backtesting service for manifest inclusion
+________________
+
+
+P15a: Minimum Observability (Gating Requirement)
+What This Plan Must Contain
+1. Structured logging standard — JSON log format, log levels, field conventions (timestamp, service, correlation_id, level, message, context)
+2. Correlation ID propagation — a request ID generated at the API layer, passed through to background tasks, workers, and collector runs. Every log line for a single user action shares one correlation ID.
+3. Collector freshness dashboard — queryable status per collector: last successful run, last error, data freshness (time since last record ingested)
+4. Replication lag metric — how stale is each instance relative to the other, per table group
+5. Job lifecycle visibility — ARQ task status (queued, running, complete, failed) with timing
+6. Disk utilization monitoring — especially the 1TB offsite disk, with watermark alerts
+7. Basic health endpoints — /health (is the API up), /status (database connectivity, Redis connectivity, replication lag)
+Dependencies
+* P01 (needs collector_runs, collector_status table schemas for freshness tracking)
+* P02 (needs to know where logs are written and how they're aggregated)
+What Must Be True When This Plan Is Done
+* Any failed collector or task is visible within 60 seconds
+* Replication lag between instances is queryable and alertable
+* Disk pressure triggers an alert before it becomes a crisis
+* A developer can trace a user request from API entry through task execution to completion using a single correlation ID
+________________
+
+
+P03: Auth & Entitlements Service
+What This Plan Must Contain
+1. The unified auth resolver (Firebase Bearer token OR X-API-Key → user context)
+2. require_tier(), require_feature(), require_admin() dependency factories
+3. API key lifecycle: generation, hashing, storage, rotation, revocation
+4. Tier entitlements table schema and seed data (what each tier gets)
+5. Rate limiting integration (per-user, per-API-key, per-IP)
+6. Session/token caching strategy (avoid hitting Firebase on every request)
+Key Decisions to Make During Planning
+* Token caching. Firebase token verification involves a network call to Google. Caching verified tokens in Redis (with short TTL matching token expiry) avoids repeated verification. The plan must define the caching strategy.
+* API key rate limits per tier — already specified in API v2 Architecture (Free: 0 keys, Entry: 1/100hr, Professional: 3/500hr, Analyst: 5/2000hr, Research: 10/10000hr). Confirm or adjust.
+Dependencies
+* P01 (needs users, api_keys, tier_entitlements table schemas)
+* P02 (needs to know where the API server runs)
+What Must Be True When This Plan Is Done
+* Module has zero awareness of what it's protecting (no business logic in auth)
+* Can be tested with a mock user database (no Firebase dependency in tests)
+* Rate limiter is Redis-backed, not in-memory
+________________
+
+
+P04: LLM Gateway Service
+What This Plan Must Contain
+1. Provider abstraction: OpenAI, Anthropic, Ollama, vLLM, any OpenAI-compatible endpoint
+2. Use-case routing table (database-driven, from llm_model_routing table)
+3. Fallback chains (database-driven, from llm_fallback_chain table)
+4. Standardized request/response types (LLMRequest → LLMResponse)
+5. Streaming support (for report generation and chat interfaces)
+6. Timeout and retry logic per provider
+7. Usage tracking and cost attribution (which use-case consumed how many tokens)
+Key Decisions to Make During Planning
+* Use-case → weight-class mapping. Each LLM use-case must be classified as light (cloud-callable, any location) or heavy (offsite-only). The current use-cases:
+   * explain → light (4o-mini or Haiku, fast jargon explanation)
+   * cohort_match → light (structured output, 4o-mini sufficient)
+   * report_chat → light (conversational, cloud for reliability and low latency)
+   * signal_classify → light or heavy depending on complexity (reasoning model vs fast classifier)
+   * deep_research → heavy (long context, high quality, offsite local model)
+   * report_generate → heavy (long output, offsite local model)
+   * html_render → heavy (if LLM-assisted, offsite; or eliminated entirely via Jinja2 templates)
+* The gateway must be location-aware. When running inside an offsite worker, it can call both cloud APIs and local models. When running inside the AWS API server, it can only call cloud APIs. Heavy use-cases called from AWS must be rejected or rerouted to a background task. The gateway's available model set depends on where it's instantiated.
+* The llm_model_routing table stores the routing config. It's in the single shared schema, so both locations read the same config. But the base_url for local models (e.g., http://localhost:11434/v1) is only valid from offsite. The plan must handle this — either with location-conditional routing or by having workers read different config subsets.
+Dependencies
+* P01 (needs llm_model_routing, llm_fallback_chain schemas)
+* P02 (needs network path to LLM endpoints)
+What Must Be True When This Plan Is Done
+* Adding a new LLM provider is an INSERT INTO llm_model_routing — zero code change
+* Gateway has exactly two code paths: OpenAI-compatible and Anthropic
+* Every LLM call is logged with use_case, model, tokens, latency
+________________
+
+
+P05: Background Task Infrastructure
+What This Plan Must Contain
+1. ARQ worker setup with Redis backend
+2. Task definitions for all async operations: report generation, backtest runs, cohort LLM matching, PDF export, collector scheduling
+3. Task result storage and retrieval pattern (how the API polls for job status)
+4. Worker scaling: how many workers, what concurrency, where they run
+5. Scheduled tasks: collector runs on cron, materialized view refresh, stale data cleanup
+6. Dead letter handling: what happens when a task fails repeatedly
+Key Decisions to Make During Planning
+* Where do workers run? Heavy compute workers (scoring, backtesting, report generation, collection) run offsite — near the data mass and local LLMs. Light workers (email notifications, PDF generation) can run in AWS or offsite. The plan must categorize each task type.
+* Redis location. ARQ needs Redis. If the API server is in AWS and workers are offsite, Redis must be reachable by both. Options: Redis offsite (workers are local, API connects over tunnel), or Redis in AWS (opposite), or Redis on each side with separate queues per location. Simplest: one Redis instance offsite, API server connects over the secure tunnel. The latency of enqueuing a task (one Redis write) is negligible.
+Dependencies
+* P02 (where processes run, Redis location)
+What Must Be True When This Plan Is Done
+* No request handler blocks for more than 5 seconds
+* Every long-running operation returns a job_id and is pollable
+* Workers can be restarted without losing in-progress work (idempotent tasks)
+________________
+
+
+P06: Collector Framework v2
+What This Plan Must Contain
+1. Base collector interface: collect() → list[RawRecord], with event_time, observed_time, ingest_time on every record
+2. Collector registry: declarative registration, discovery, scheduling
+3. Per-collector configuration: API keys, rate limits, retry policies, schedules
+4. Health monitoring: last successful run, error counts, data freshness
+5. The collector → iald_signals pipeline: how raw records become normalized signal entries
+6. Migration plan for existing 140+ collectors: which survive, which are rewritten, which are dropped
+7. The event_time / observed_time audit: which collectors currently provide clean timestamps, which don't, and the fix plan for each
+Key Decisions to Make During Planning
+* Collector survival triage. 140+ collectors exist. The Collector-Signal Reconciliation doc identified 13 signals with collectors that work but aren't wired to the scorer. The plan needs to categorize every collector: (a) works and produces clean timestamps, (b) works but needs timestamp cleanup, (c) broken, (d) redundant/obsolete. Only categories (a) and (b) survive. This is a significant audit.
+* Collector output format. Currently collectors write directly to various tables with inconsistent schemas. v2 collectors should all produce a standardized RawRecord that the normalization layer (P07) consumes. The plan defines that record format.
+* Rate limit and API key management. Collectors use external APIs (Polygon, NewsAPI, EDGAR, etc.) with rate limits and API keys. These are operational secrets that must be managed. The plan must specify where they're stored and how collectors access them.
+Dependencies
+* P01 (needs collector_runs, collector_status, iald_signals schemas)
+* P02 (collectors run offsite)
+* P05 (collectors are scheduled tasks)
+What Must Be True When This Plan Is Done
+* Adding a new collector is: write one class, register it, configure its schedule
+* Every collector output has event_time, observed_time, ingest_time — no exceptions
+* A collector that fails does not poison the database (atomic writes, idempotent runs)
+* Every collector emits a normalized RawRecord envelope containing: raw_record_id (ULID), entity_id, source_type, event_time, observed_time, ingest_time, collector_version, collector_run_id, schema_version, and payload (JSON). This is the hard contract between P06 and P07 — extractors consume RawRecord, nothing else
+________________
+
+
+P07: Signal Normalization & Extractor Registry
+What This Plan Must Contain
+1. The signal extractor interface: extract(raw_data, security_context) → SignalEvent
+2. Extractor registry with @register decorator pattern
+3. Normalization functions for each signal (raw value → strength_norm [0,1], direction, reliability)
+4. Mapping from 80 cataloged signals (S001–S080) to their extractor implementations
+5. Versioning: signal_definitions_hash computed from the set of active extractors and their normalization parameters
+6. The SignalEvent data contract (matching the backtesting spec §4.1)
+Key Decisions to Make During Planning
+* How many of the 80 signals get extractors in v2.0? Not all 80 will be ready. The gap analysis shows only ~12 are active in production today, with 13 more ready to wire. The plan must define the v2.0 signal set (probably 25-30 signals) and the roadmap for the rest.
+* Where do normalization parameters live? Hardcoded constants (current approach in iald_scorer_v3.py), or database-driven config, or a versioned JSON file? The backtesting spec requires a signal_definitions_hash — this is easier if definitions are in a single serializable config.
+Dependencies
+* P06 (extractor inputs come from collectors)
+* P01 (needs iald_signals schema)
+What Must Be True When This Plan Is Done
+* The extractor registry can enumerate all active signals and compute their definitions hash
+* Adding a new signal extractor is: write one class with the extractor interface, decorate it with @register
+* The backtesting service can use the same extractors as production scoring
+________________
+
+
+P08: Scoring Engine (Pillar 1 Core)
+What This Plan Must Contain
+1. The scoring engine as a pure function: score(signal_events, scoring_model, latency_model) → ScoreSample
+2. Implementation of all math from the Backtesting Spec Part B:
+   * Decay function (§7)
+   * Effective evidence weight (§8)
+   * Magnitude via logistic link (§9)
+   * Lean via signed weighted mean (§10)
+   * Confidence: quality, diversity, temporal ordering (§11)
+   * Chain type probabilities via softmax (§12)
+   * Family budget enforcement (§13)
+   * Cross-family independence penalties (§14)
+   * Counterfactual deltas (§15)
+3. Scoring model configuration format: signal weights, half-lives, tiers, family params, aggregation config
+4. Production scoring path: how the engine is called for live scoring (via API request or batch job)
+5. The v1-to-v2 score mapping: how to reconstruct the 0–100 / BUY→SELL verdict from the new magnitude+lean+confidence triple
+6. Single-implementation guarantee: the same module runs in production scoring AND inside backtests
+Key Decisions to Make During Planning
+* Default scoring model parameters. The backtesting spec defines the math but not the initial parameter values (k, θ for logistic; exponents a, b, c for confidence; temperature T for chain typing). These need sane defaults that approximate current production behavior before calibration via backtesting.
+* Batch vs per-security scoring. The current scorer processes one security at a time. The backtesting service needs to score thousands of securities across hundreds of time steps. The engine must support batch execution without architectural changes (same function, called in a loop or via asyncio.gather).
+Dependencies
+* P07 (signal extractors produce the SignalEvent inputs)
+* P01 (scoring model configs may be in database)
+What Must Be True When This Plan Is Done
+* score() is a pure function with zero I/O, zero side effects
+* Given identical inputs, it produces identical outputs (deterministic)
+* The function signature matches what the backtesting service expects
+* Legacy 0–100 scores can be reconstructed from the output
+________________
+
+
+P09a: Labeled Event Registry & Ground Truth
+What This Plan Must Contain
+1. Event schema — the labeled_events table: event_id (ULID), entity_id, event_type, event_time (precise announcement/filing/effective timestamp), event_description, source_provenance (where the label came from), label_confidence (how certain we are this is correctly labeled and timed), metadata (JSON)
+2. Supported event types — initial set: EARNINGS_SURPRISE, MNA_ANNOUNCEMENT, SEC_ENFORCEMENT, RUG_PULL, GOVERNANCE_COLLAPSE, INSIDER_TRADING_DISCLOSURE. Each with a definition of what qualifies and what timestamp to use.
+3. Sourcing strategy per event type — where labels come from: SEC EDGAR (enforcement actions, insider filings), Polygon corporate actions (earnings, M&A), CoinGecko/DeFiLlama (rug pulls), manual curation (governance collapses). Each source has different latency and reliability.
+4. Timestamp accuracy rules — for each event type, which timestamp is canonical: announcement time, filing time, effective time, or market discovery time. These are not the same. An M&A announcement at 4:15 PM ET is different from the 8-K filing at 5:30 PM.
+5. Label confidence scoring — not all labels are equally trustworthy. An SEC enforcement action with a published complaint has higher confidence than a "rug pull" classification based on liquidity drain heuristics. The plan must define confidence tiers and what evidence is required for each.
+6. Coverage targets — how many events per type, per asset class, per time period. A backtest against 5 events is not meaningful. The plan must define minimum coverage for a backtest to be considered valid.
+7. Versioning and immutability — labeled event datasets are frozen into versioned snapshots (Global Invariant: Immutability). Adding new labels creates a new dataset version. You never mutate a frozen dataset.
+Key Decisions to Make During Planning
+* Who does the labeling? This is a data curation task, not engineering. Some labels can be automated (earnings surprises from actual vs consensus, SEC filings from EDGAR), but others require judgment (was this a governance collapse or just a board reshuffle?). The plan must be honest about the manual effort required.
+* Minimum viable labeled dataset. What's the smallest dataset that makes P09 useful? Probably: 200+ equity events (earnings + M&A + SEC actions) with precise timestamps, covering at least 6 months. The plan must define this threshold.
+Dependencies
+* P01 (needs labeled_events table schema)
+* Independent of P08/P09 — this is a data effort, not a code effort, and can run in parallel
+What Must Be True When This Plan Is Done
+* The labeled_events schema exists and is populated with a minimum viable dataset
+* Every event has a confidence score and a provenance record
+* The dataset can be snapshot-frozen and referenced by snapshot_id in a backtest run
+* Coverage metrics are computed and documented (events per type, per asset class, per month)
+________________
+
+
+P09: Backtesting Service
+What This Plan Must Contain
+1. Full implementation of the Backtesting Service Spec (snapshot management, signal jobs, run orchestration, evaluation)
+2. Snapshot creation: freezing data from the data database into immutable partitions
+3. Evaluation engine: precision, recall, lead time, FPR, Brier score, AUC
+4. Labeled events dataset: schema, initial curation plan, event types covered
+5. Artifact storage: where backtest results live (Postgres tables? Parquet files on disk? Both?)
+6. API endpoints mapped to the API v2 route structure
+7. Frontend integration: how the backtest UI consumes results
+Key Decisions to Make During Planning
+* Artifact storage format. The spec suggests Parquet for signal events (good for columnar analysis) and Postgres for metrics/scores (good for API queries). The 1TB disk budget must accommodate backtest artifacts. A single full backtest (S&P 1500, 4 months, hourly resolution) could produce 10+ GB of score time series. How many backtests do you keep?
+* Labeled events are the gating factor. The backtesting service is worthless without a curated dataset of material events with precise timestamps. This is a data curation effort, not engineering. The plan must include: where do labeled events come from (SEC filings, Polygon corporate actions, manual curation), what event types are covered first, and who does the work.
+Dependencies
+* P08 (scoring engine is the core of a backtest run)
+* P09a (labeled event dataset is required for evaluation — P09 may not begin until P09a is at least drafted)
+* P07 (signal extractors generate signal events from snapshot data)
+* P05 (backtest runs are background tasks via ARQ)
+* P01 (needs backtest-specific tables)
+What Must Be True When This Plan Is Done
+* A backtest can be created, run, and queried entirely via API
+* Identical inputs produce identical outputs (determinism CI test)
+* No network calls during a backtest run (sandbox enforcement)
+________________
+
+
+P10: Tempo Service (Pillar 4)
+What This Plan Must Contain
+1. Baseline computation: historical self, sector peer, market regime, calendar proximity, seasonal patterns
+2. Tempo context format: what data Tempo produces and how Score/Cascade consume it
+3. The integration point in the scoring engine: where Tempo context modifies signal weights or thresholds
+4. Update cadence: how often baselines are recomputed (daily? hourly? on-demand?)
+5. Storage: tempo_baselines table schema, data volume estimates
+6. API surface: /api/v2/tempo/{ticker}, /api/v2/tempo/anomalies, /api/v2/tempo/regime
+Key Decisions to Make During Planning
+* What "normal" means must be precisely defined for each baseline lens. "Normal options volume for AAPL on the Tuesday before earnings" is a very specific baseline. The plan must enumerate the baseline lenses and their computation methods.
+* Tempo's relationship to the fundamental multiplier. The current _calculate_fundamental_multiplier() in research.py (PE vs sector, ROE strength, margin comparison) is proto-Tempo. Does Tempo subsume it entirely, or do they coexist?
+Dependencies
+* P08 (Tempo adjusts scoring engine behavior)
+* P06 (Tempo consumes the same collector data as Score)
+* P01 (needs tempo_baselines schema)
+What Must Be True When This Plan Is Done
+* Tempo is a pure service: writes baselines, never reads scores
+* Score can function with or without Tempo context (degraded but not broken)
+* The backtesting service can run with/without Tempo to measure its impact
+________________
+
+
+P11: Cascade Service (Pillar 3)
+What This Plan Must Contain
+1. Chain type classification logic for CT-01 through CT-10
+2. The chain_affinity vectors for all 80 signals (which chain types each signal supports)
+3. Cascade event format and storage
+4. Integration with Score: how Cascade classification appears on the research page
+5. API surface: /api/v2/cascade/{ticker}, /api/v2/cascade/active, /api/v2/cascade/chain-types
+6. Minimum family requirements: which chain types are detectable with the v2.0 signal set (the gap analysis shows 5 of 10 are currently undetectable)
+Dependencies
+* P08 (Cascade reads the same signals as Score)
+* P10 (Cascade benefits from Tempo's baselines)
+* P07 (signal extractors must populate chain_affinity vectors)
+* P01 (needs cascade_events schema)
+What Must Be True When This Plan Is Done
+* Cascade classification is backtestable (per-chain-type metrics via P09)
+* Each chain type has a clear minimum signal family requirement documented
+* The UNKNOWN bucket is honest (per the scoring math in the backtesting spec)
+________________
+
+
+P12: Conductor Service (Pillar 2)
+What This Plan Must Contain
+1. Strategy definition format: entry conditions, exit conditions, position sizing, risk limits
+2. Brokerage integration: Alpaca API (existing), abstraction layer for future brokerages
+3. Execution pipeline: Score → strategy evaluation → order placement → position tracking → P&L
+4. Risk management: maximum position size, maximum portfolio exposure, drawdown limits, circuit breakers
+5. Paper trading mode: full execution pipeline against simulated fills before live money
+6. API surface: /api/v2/signals/conductor/*
+7. Audit trail: every execution decision must be logged with the score, strategy, and reasoning
+Key Decisions to Make During Planning
+* Does Conductor consume Cascade output? The product architecture says Conductor benefits from Cascade but works without it. The plan must define both paths: Conductor-without-Cascade (v2.0) and Conductor-with-Cascade (v2.3). The strategy format should have an optional Cascade condition field from day one.
+* Backtesting Conductor strategies. The backtesting spec covers scoring backtests. Conductor strategy backtesting (simulated trading against historical scores) is a separate, harder problem. The plan should scope this but probably defer implementation to v2.3.
+Dependencies
+* P08 (Conductor consumes Score output)
+* P03 (strategy creation requires authenticated users)
+* P01 (needs conductor_strategies, conductor_executions, conductor_positions schemas)
+What Must Be True When This Plan Is Done
+* No trade is executed without an audit record explaining why
+* Conductor can be disabled globally via a circuit breaker without code changes
+* Strategy definitions are portable (can be exported, shared, backtested)
+________________
+
+
+P13: API v2 Route Layer
+What This Plan Must Contain
+1. Domain module structure: signals/, market/, users/, platform/, backtests/, cascade/, tempo/
+2. Route registration pattern (per the API v2 Architecture spec)
+3. Pydantic schema definitions for every endpoint's request/response
+4. Error handling: standardized error response format, HTTP status code conventions
+5. OpenAPI/Swagger documentation generation
+6. CORS configuration (actual allowlist, not .*)
+7. Request/response logging middleware
+Key Decisions to Make During Planning
+* API server runs in AWS (resolved by the architecture: close to users, local Postgres, cloud LLMs for light use-cases, heavy work dispatched to offsite workers via ARQ). The plan should confirm all endpoint patterns work with this placement.
+* Versioning for breaking changes. The spec says /api/v2/. What constitutes a breaking change? What triggers /api/v3/? The plan should define the contract.
+Dependencies
+* P01 through P12 (the API is a thin layer over all services)
+* P03 (auth middleware)
+* P04 (LLM gateway for explain, report_chat, deep_research endpoints)
+* P05 (background task submission for heavy endpoints)
+What Must Be True When This Plan Is Done
+* Every endpoint is documented in OpenAPI
+* Every endpoint has auth, rate limiting, and entitlements enforcement
+* No business logic lives in route handlers (they delegate to service modules)
+________________
+
+
+P14: Frontend v2
+What This Plan Must Contain
+1. Route restructuring (28 → 25 routes per Frontend v2 Design spec)
+2. Component decomposition: SignalReplay.tsx (2,273 lines → 6 components), CohortTools.tsx (2,463 lines → 6 components)
+3. Service layer alignment with API v2 domains
+4. Design system formalization: IALD-specific component library
+5. State management: AuthContext, EntitlementContext, TanStack Query configuration
+6. Build and deploy process (Vite build → static hosting)
+7. Lab page dissolution: promote SignalReplay, SignalBacktester, SignalRadar, ConfidenceHeatmap to first-class routes
+Dependencies
+* P13 (frontend consumes the API)
+* P02 (deployment and hosting)
+What Must Be True When This Plan Is Done
+* npm run build produces a deployable artifact
+* No component file exceeds 500 lines
+* All API calls go through the service layer (no direct fetch() in components)
+________________
+
+
+P15b: Full Observability (Expanded)
+What This Plan Must Contain
+1. Application-level metrics: request latency histograms, error rates per endpoint, LLM call latency per use-case
+2. Collector health monitoring: per-collector success rate trends, data volume trends, anomaly detection on freshness
+3. Scoring pipeline monitoring: score generation rate, scorer errors, signal coverage per security
+4. Database monitoring: connection pool utilization, query performance (slow query log), disk usage trends
+5. Alerting rules: Slack notifications for system failures (expanding beyond P15a's baseline alerts)
+6. Dashboard: operational overview (collector status, scoring status, replication lag, disk usage, active backtests)
+Dependencies
+* All prior plans (P15 monitors everything)
+________________
+
+
+P16: Report Generation Pipeline
+What This Plan Must Contain
+1. The decomposed report pipeline (from research.py decomposition spec): data collection → scoring → LLM report generation → HTML/PDF rendering
+2. Jinja2 templates replacing 1,600 lines of Python-string HTML
+3. LLM prompt construction per security type (equity, crypto, commodity, sovereign currency, CBDC, prediction market)
+4. Pithy observation generation (integrated into single LLM call, not separate)
+5. Report archiving and versioning
+6. PDF export (PDFShift or WeasyPrint)
+Dependencies
+* P08 (scoring engine produces the data for reports)
+* P04 (LLM gateway handles report text generation)
+* P05 (report generation is a background task)
+* P01 (needs research_reports schema)
+________________
+
+
+Execution Order
+Phase 1: Foundation (Weeks 1-3)
+  ├── P01: Database schema & DDL
+  ├── P02: Environment & deployment
+  └── P15a: Minimum observability (logging, correlation IDs, health endpoints)
+  
+Phase 2: Core Services (Weeks 3-5)
+  ├── P03: Auth & entitlements
+  ├── P04: LLM gateway
+  └── P05: Background tasks (ARQ)
+  
+Phase 3: Data Pipeline (Weeks 5-8)
+  ├── P06: Collector framework v2
+  ├── P07: Signal normalization & extractors
+  └── P09a: Labeled event registry (parallel data curation effort)
+  
+Phase 4: Scoring & Validation (Weeks 8-12)
+  ├── P08: Scoring engine
+  ├── P09: Backtesting service
+  └── P16: Report generation pipeline
+  
+Phase 5: Presentation (Weeks 10-14)
+  ├── P13: API v2 routes
+  └── P14: Frontend v2
+  
+Phase 6: Intelligence & Action (Weeks 14-20)
+  ├── P10: Tempo (Pillar 4)
+  ├── P12: Conductor (Pillar 2)
+  └── P11: Cascade (Pillar 3)
+  
+Phase 7: Expanded Operations (Ongoing from Week 8)
+  └── P15b: Full observability (dashboards, expanded alerting)
+P09a starts in Phase 3 but is primarily a data curation effort that runs in parallel with engineering work. It must reach "minimum viable labeled dataset" before P09 can produce meaningful evaluation results.
+Phases 4 and 5 overlap — the API route layer can be built incrementally as backend services become available. Phase 7 starts early and runs continuously.
+Total estimated duration: 20 weeks for a single experienced developer. This is aggressive. It assumes the developer has deep context on the existing codebase (you do) and that each plan is already written when the phase starts (that's what this meta-plan ensures). Parallel effort (a second developer on frontend while you do backend) could compress to 14-16 weeks.
+________________
+
+
+How to Execute This Meta-Plan
+For each plan P01 through P16 (plus P09a and P15a):
+1. Draft the plan using the instructions in this document. The plan contains: module boundaries, data contracts (input/output types), interface definitions, dependency declarations, and acceptance criteria.
+2. Review against this meta-plan for dependency coherence. If Plan N's output doesn't match Plan N+1's expected input, reconcile before proceeding.
+3. Write detailed pseudo-code for the plan. This is the second pass you described. Pseudo-code defines class structures, function signatures, error handling, and the integration points with other plans. It is language-specific (Python, TypeScript) but not runnable — it's a blueprint that a developer (or Claude Code) can implement directly.
+4. Implement from the pseudo-code. Each plan, once fleshed out with pseudo-code, is a self-contained work unit. It can be implemented, tested, and merged independently (as long as its dependencies are in place).
+We start with P01 and P02. They have no dependencies and everything else depends on them. When you're ready, pick one.
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

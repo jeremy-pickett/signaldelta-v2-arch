@@ -1,0 +1,608 @@
+﻿Information Asymmetry Leakage Detection (IALD)
+Scoring Foundation Document
+Version 2.0 | Draft
+________________
+
+
+Document Control
+Field
+	Value
+	Document Owner
+	Jeremy Pickett
+	Created
+	January 8, 2026
+	Revised
+	February 7, 2026
+	Status
+	DRAFT
+	Classification
+	CONFIDENTIAL
+	Supersedes
+	IALD Foundation Document v1.0 (Jan 8, 2026)
+	Related Documents
+Document
+	Relationship
+	SignalDelta v2 PRD r02
+	Product specification; consumes this document's scoring model
+	Signal Family to Cascade Stage Mapping v1
+	Cascade chain types and family-stage relationships; orthogonal to scoring
+	IALD Signal Brainstorm (Equity) v1
+	Original 20-signal candidate list; absorbed into family taxonomy
+	IALD Signal Brainstorm (Crypto) v1
+	Crypto signal candidates; absorbed into families F14–F16
+	________________
+
+
+Table of Contents
+1. Purpose and Scope
+2. Core Hypothesis
+3. Theoretical Framework
+4. Foundational Assumptions
+5. Definitions and Terminology
+6. Signal Family Architecture
+7. The Three Scoring Components
+8. Score Composition Function
+9. Tempo Integration with Scoring
+10. Calibration and Validation Constraints
+11. Success Criteria
+12. Ethical Framework
+13. Known Limitations
+14. Open Design Decisions
+________________
+
+
+1. Purpose and Scope
+This document establishes the theoretical and algorithmic foundation for the IALD scoring system — the measurement engine at the core of the SignalDelta platform.
+It defines: why information asymmetry produces detectable leakage, what the scoring system measures, how signals are classified into independent families, how three scoring components are independently derived and composed into the customer-facing IALD Score, and what constraints govern calibration and validation.
+It does not define: the Cascade (information propagation mapping), Tempo (temporal baseline contextualization), or Conductor (operational response synthesis). Those services consume the scoring engine's outputs but are specified in their own documents. The Cascade chain type taxonomy and family-to-stage mapping are specified in the Signal Family to Cascade Stage Mapping document.
+It does not define: API schemas, database designs, collection mechanisms, execution logic, or product packaging. Those belong in the PRD and its implementation documents.
+What Changed from v1
+The v1 Foundation Document (January 8, 2026) established the theoretical basis for IALD as a research project. This v2 refactors that document to serve as the scoring specification for a platform entering production. Specifically:
+* The signal taxonomy (v1 §8) is replaced by a 20-family architecture derived from the actual system's 104+ signals, 18 correlation clusters, and 40+ data sources — organized by institutional pathway rather than by hypothesized signal strength.
+* The signal interaction model (v1 §8.2) Confidence = f(Σ signal_strength × signal_weight) + interaction_bonus is replaced by a three-component model (Magnitude, Directional Lean, Agreement) composed as IALD Score = 50 ± (Normalized_Magnitude × Lean × Agreement_Factor).
+* The measurement methodology (v1 §9) is replaced by a component-level algorithmic specification at one level above pseudocode.
+* The theoretical framework, core hypothesis, foundational assumptions, ethical framework, and success criteria are retained and updated where the intervening month of development has refined or challenged them.
+________________
+
+
+2. Core Hypothesis
+2.1 Primary Hypothesis
+Material non-public information (MNPI), when acted upon in public markets, produces statistically detectable behavioral anomalies in observable data streams. These anomalies can be identified without knowing the content of the MNPI, enabling probabilistic inference about the existence of information asymmetry.
+2.2 Supporting Hypotheses
+H1: Leakage Inevitability. Any position taken in a public market constitutes information disclosure. Concealment strategies (order splitting, dark pool routing, timing distribution) reduce signal amplitude but cannot eliminate signal existence. The act of trading is itself a statement.
+H2: Temporal Clustering. Actors possessing MNPI have decaying advantages — information value diminishes as resolution approaches or as leakage spreads. This creates incentive structures that produce non-random clustering of anomalous activity in pre-event windows. The characteristic window is 8–72 hours for equities, with distribution shape varying by event type, security liquidity, and market conditions. Crypto windows are compressed (minutes to days).
+H3: Cohort Decoherence. Securities affected by MNPI exhibit price/volume behavior that diverges from structurally similar peers beyond historical variance bounds. This divergence is detectable even when the absolute behavior appears normal in isolation. Cohort composition is multi-dimensional — a single security belongs to multiple peer groups simultaneously, each representing a different business dimension (the Tempo multi-lens model).
+H4: Narrative-Price Coupling Inversion. In efficient markets, narrative follows price (explaining movements post-hoc). When narrative precedes price movement — particularly coordinated narrative across multiple sources — this indicates information dissemination from sources upstream of public knowledge. The temporal ordering of narrative relative to capital commitment is a cascade diagnostic, not just a scoring input.
+H5: Prediction Market Signal Concentration. Prediction markets, by aggregating beliefs with financial stakes, function as clearinghouses for opaque information. Anomalous positioning patterns (new accounts, concentrated bets, probability divergence from peer events) signal the introduction of non-public information into the market's belief formation.
+H6: Independent Convergence. (New in v2.) Individual weak signals from a single data stream are indistinguishable from noise. When multiple weak signals from independent data streams converge — that is, when institutional pathways that have no mechanical coupling produce directionally coherent anomalies — the probability that the convergence is coincidental decreases multiplicatively with each additional independent source. This is the statistical foundation of the Agreement component.
+H7: Institutional Pathway Diversity. (New in v2.) Information asymmetry enters the observable system through distinct institutional pathways: corporate governance, litigation, derivatives markets, off-exchange execution, short-selling infrastructure, analyst networks, disclosure filings, media, social channels, operational side-channels, crypto on-chain flows, prediction markets, credit markets, commodity markets, and futures positioning. These pathways are mechanically independent — a Form 4 filing and an options sweep originate from different institutional processes, traverse different infrastructure, and are reported through different regulatory mechanisms. This independence is what makes multi-family convergence statistically meaningful.
+2.3 Null Hypothesis
+Observable market anomalies (unusual positioning, cohort divergence, narrative acceleration) are distributed randomly with respect to price-sensitive events. Any apparent correlation between detected anomalies and subsequent information revelation is attributable to chance, survivorship bias in observation, legitimate superior analysis of public information, or self-fulfilling prophecy dynamics.
+The null hypothesis is rejected if detection rates for information asymmetry exceed baseline noise at statistically significant levels across a sufficiently large sample of events.
+________________
+
+
+3. Theoretical Framework
+3.1 Markets as Probability Systems
+The project adopts a conceptual analogy to quantum mechanics — not as a literal physical model, but as a useful framing for the phenomena we observe:
+Price as probability cloud. At any moment, a security's "true" price exists as a probability distribution, not a point value. The observable price is a measurement that collapses this distribution momentarily, but the distribution immediately reforms.
+Decoherence through information. When new information enters the system, it constrains the probability distribution. Information acts as a decoherence mechanism, collapsing probability toward values supported by the new knowledge.
+Observation effects. The act of trading affects price, just as measurement affects quantum states. Large informed trades must balance information exploitation against market impact — a tension that produces the behavioral anomalies we detect.
+Cohort entanglement. Structurally similar securities have correlated probability distributions. When one security's distribution shifts independently of its cohort, this signals localized information injection. The multi-lens cohort model (Tempo) formalizes this: the same security belongs to multiple peer groups, and the lens through which it deviates identifies the business dimension under informational stress.
+3.2 Information Security Frame
+The project borrows detection methodologies from information security:
+Side-channel analysis. Just as cryptographic systems leak information through timing, power consumption, or electromagnetic emissions, trading systems leak information through order flow, timing patterns, and position structures. The 20 signal families are, collectively, a side-channel attack on the information advantage.
+Behavioral anomaly detection. Rather than signature-based detection (looking for known patterns of insider trading), the system employs anomaly detection (identifying deviations from baseline behavior established by Tempo). This makes the system robust to adversarial adaptation — the detector doesn't need to know how the informed actor is trading, only that something deviates from baseline.
+Data exfiltration model. Insider information flowing into public markets is conceptually equivalent to data exfiltration in infosec. The data (knowledge of future events) is being extracted from a privileged context (boardrooms, regulatory agencies, deal teams) and transmitted into public systems (markets). The 20 signal families monitor 20 distinct exfiltration channels.
+3.3 Efficient Market Hypothesis: Qualified Acceptance
+The project accepts EMH as directionally correct while rejecting its strong form:
+Accepted: Markets process information and converge toward values reflecting available information. Price discovery is real.
+Rejected: The assumption that information is symmetrically available. The assumption that convergence is instantaneous. The assumption that all participants have equal analytical capacity.
+Core claim: The process of price discovery — not just the outcome — contains extractable information about who knew what when. EMH describes equilibrium; IALD examines the approach to equilibrium. The IALD Score measures the behavioral intensity of that approach. The Cascade maps which institutional layers the information has reached during that approach.
+________________
+
+
+4. Foundational Assumptions
+4.1 Explicit Assumptions
+A1: Information asymmetry is endemic. Financial markets are structurally characterized by information advantages held by principals (executives, board members, institutional investors, political actors, judges, regulators) over agents and retail participants. This is not an aberration but a baseline condition.
+A2: Humans are fallible and incentivized. When financial stakes are present, humans reliably act in self-interest, frequently deceive, and make detectable errors in concealment. The higher the stakes, the more reliably this holds.
+A3: Position-taking is disclosure. Every trade, every bet, every position is a statement of belief with attached stakes. These statements aggregate into detectable patterns regardless of individual intent to conceal.
+A4: Narrative has authors. Rumors, guidance expectations, and market narratives do not emerge spontaneously. When guidance is "perfectly priced in," someone constructed the expectation. Narrative is a transmission vector for information, not a spontaneous phenomenon.
+A5: Prediction markets aggregate opaque information. Platforms like Polymarket and Kalshi function as clearinghouses where participants with non-public knowledge can convert information into financial position. Even with noise, genuine signal exists.
+A6: Peer relationships are informative and multi-dimensional. Securities have structural peers across multiple dimensions simultaneously. Divergence from peer behavior beyond historical norms through any single lens indicates localized information affecting the divergent security along that business dimension.
+A7: Institutional pathways are independent. (New in v2.) The 20 signal families represent mechanically distinct institutional pathways through which information enters the observable system. Signals from different families carry independent information because they traverse different infrastructure, involve different institutional actors, and are reported through different mechanisms. This independence is an approximation — all market signals share some correlation through the common factor of price — but it is the strongest available independence boundary.
+4.2 Assumptions Requiring Validation
+A8: Signal amplitude exceeds noise floor. The behavioral signatures of informed trading are strong enough to detect against background market noise using available tools and data. Status: Partially validated. v1 backtesting shows detectable signal in options flow, insider trading, congressional trading, and dark pool clustering. Signal-to-noise in narrative velocity and operational side-channels remains unvalidated.
+A9: Public data is sufficient. Detection is achievable without institutional-grade data infrastructure, accepting reduced precision/recall. Status: Validated for primary families. Public data from EDGAR, FINRA, Unusual Whales, Capitol Trades, and on-chain sources produces actionable signals. Delayed data (options T+15min, dark pool T+24h) compresses the detection window but does not eliminate it.
+A10: 8–72 hour windows are appropriate. Informed actors' incentive to act before resolution creates detectable clustering in this timeframe. Status: Validated for equity events. Median detection window approximately 28–32 hours for US equities. Crypto windows are shorter (minutes to hours for rug pulls, hours to days for exchange listing front-running). Credit distress cascades may exceed 72 hours.
+A11: Multiple weak signals compound. (Renumbered from A10.) Individual weak signals may be indistinguishable from noise, but convergence of multiple weak signals across different data streams produces reliable detection. Status: Validated. The v1 scorer's independence multiplier (1.25x for 4+ active clusters) produces measurably better precision than single-cluster detection. This is the empirical basis for the Agreement component in v2.
+________________
+
+
+5. Definitions and Terminology
+5.1 Core Terms
+Information Asymmetry: Condition where one party to a transaction possesses material information unavailable to counterparties. In this project, specifically refers to advantages that cannot be derived from public information through reasonable analysis.
+Material Non-Public Information (MNPI): Information that a reasonable investor would consider important in making an investment decision, which has not been publicly disclosed.
+Leakage: The inevitable disclosure of information through observable behavior. The behavioral signatures of informed trading that appear in public data streams.
+Signal: Observable data pattern correlated with information asymmetry existence. In v2, each signal belongs to exactly one signal family and carries two properties: a magnitude contribution and an optional directional contribution.
+Signal Family: A cluster of signals derived from a single primary institutional pathway. Signals within a family are treated as correlated. Signals across families are treated as independent for Agreement calculation. v2 defines 20 families (see §6).
+Noise: Market activity indistinguishable from informed trading but generated by uninformed participants, hedging, rebalancing, or random variation.
+Cohort: Group of structurally similar securities expected to exhibit correlated behavior under normal conditions. In v2, each security belongs to multiple cohorts simultaneously, each representing a different business dimension (cohort lens).
+Detection Window: Time interval during which anomalies may be detected prior to information resolution. Varies by event type: 8–72 hours for equities (median ~28–32h), minutes to days for crypto, potentially exceeding 72 hours for credit events.
+5.2 Scoring Terms (New in v2)
+IALD Score: The customer-facing output of the scoring engine. A 0–100 scale centered at 50, measuring behavioral conviction among apparently informed market participants. The score measures what people did, not whether they were right to do it.
+Asymmetry Magnitude: First scoring component. Measures total anomalous behavior detected across all applicable signal families, regardless of direction. A non-negative scalar.
+Directional Lean: Second scoring component. Measures the aggregate directional weight of signals that carry directional information. A scalar in [-1, +1] where positive is bullish and negative is bearish.
+Agreement: Third scoring component. Measures coherence of directional evidence across independent signal families. A scalar in [0, 1] where 1.0 means all directionally-contributing families agree.
+Behavioral Conviction: The quantity the IALD Score measures. The degree to which apparently informed participants are behaving in directionally coherent, statistically anomalous ways. Not a prediction of price movement. Not a validation of the information's correctness.
+5.3 Vocabulary Discipline
+The following terminology is enforced in all contexts — documents, code comments, API labels, customer communication:
+We Say
+	We Do Not Say
+	Why
+	Behavioral conviction
+	Signal strength
+	Strength implies the move will be powerful. Conviction implies evidence is consistent.
+	Bullish/bearish lean
+	Buy/sell signal
+	A lean is an observation. A signal implies action recommendation.
+	Detected behavioral anomaly
+	Predicted outcome
+	Detected is past tense. Predicted is future tense.
+	Apparently informed participants
+	Smart money
+	Apparently informed is epistemologically honest. Smart money implies they are correct.
+	Conviction magnitude
+	Expected return
+	Magnitude measures signal agreement, not dollar outcomes.
+	Asymmetrical positions may result in
+	The security will
+	May result in. Not will.
+	________________
+
+
+6. Signal Family Architecture
+6.1 Design Principle: Independence by Institutional Pathway
+The v1 Foundation defined signals as a flat taxonomy of 10 categories rated by strength and latency. v2 replaces this with a 20-family architecture organized by institutional pathway — the mechanism through which information enters the observable system.
+The family classification serves a specific mathematical purpose: it defines the independence boundary for the Agreement component. Two signals from the same family (e.g., options volume and options strike distribution) are correlated by construction because they traverse the same infrastructure and reflect the same institutional actors. Two signals from different families (e.g., options flow and SEC filing timing) carry independent information because they traverse different institutional pathways. The Agreement component measures cross-family coherence, which is statistically meaningful only if the families are genuinely independent.
+The independence assumption is an approximation. In reality, all market signals share some degree of correlation through the common factor of price. The family structure accepts this limitation while enforcing the strongest available independence boundaries.
+6.2 The 20 Signal Families
+ID
+	Family
+	Institutional Pathway
+	Current Signals
+	Status
+	F01
+	Corporate Insider Behavior
+	C-suite/directors → Form 4 → market
+	12
+	Active
+	F02
+	Governance & Political Intelligence
+	Elected/appointed officials → disclosures/trades
+	23
+	Active
+	F03
+	Litigation & Enforcement
+	Courts/DOJ/SEC enforcement → filings/actions
+	10
+	Active
+	F04
+	Options Market Structure
+	Informed actors → derivatives leverage
+	10
+	Active
+	F05
+	Dark Pool & Off-Exchange Execution
+	Concealment-seeking institutional flow → ATS
+	5
+	Active
+	F06
+	Short Selling & Borrow Infrastructure
+	Bearish conviction → prime broker/FINRA
+	8
+	Active
+	F07
+	Analyst & Sell-Side Networks
+	Information networks → reports/ratings/revisions
+	6
+	Active
+	F08
+	Disclosure & Filing Tempo
+	Corporate disclosure behavior → EDGAR metadata
+	4
+	Active
+	F09
+	Narrative & Media Propagation
+	Sources → journalists/media → public
+	~5
+	Partial
+	F10
+	Social & Influencer Coordination
+	Informed actors → social platforms → followers
+	~5
+	Partial
+	F11
+	Operational Side-Channels
+	Human behavior leakage → non-financial observables
+	~5
+	Mixed
+	F12
+	Calendar & Event Structure
+	Corporate calendar → known windows → positioning
+	6
+	Active
+	F13
+	Futures & Institutional Positioning
+	Commercials/speculators → COT/futures basis
+	3
+	Active
+	F14
+	Crypto: On-Chain Capital Flow
+	Informed → wallet/exchange movement → blockchain
+	5
+	Active
+	F15
+	Crypto: Project Operations & Contract Risk
+	Team behavior → GitHub/contracts/locks/TVL
+	5
+	Partial
+	F16
+	Crypto: Social Coordination Layer
+	Insider groups → Telegram/Discord → market
+	0
+	Not Built
+	F17
+	Prediction & Belief Markets
+	Staked belief aggregation → parallel markets
+	3
+	Active
+	F18
+	Cross-Asset Correlation Structure
+	Macro/structural → correlated assets diverge
+	2
+	Probationary
+	F19
+	Credit & Fixed Income Signals
+	Debt markets → CDS/bond spreads/repo stress
+	0
+	Not Built
+	F20
+	Commodity & Physical Supply Chain
+	Physical economy → warehouse/shipping/weather
+	0
+	Not Built
+	6.3 Signal Properties Within Families
+Each individual signal within a family carries two properties relevant to scoring:
+Magnitude contribution: Every signal, regardless of whether it carries directional information, contributes to Asymmetry Magnitude. The existence of anomalous behavior is informative independent of its direction. A dark pool volume spike contributes to magnitude before accumulation-vs-distribution can be determined. A filing tempo deviation contributes to magnitude regardless of whether the filing implies good or bad news.
+Directional contribution: Some signals carry directional information (options flow direction, insider buy vs. sell, short interest increase vs. decrease). Others do not (filing timing anomaly, dark pool volume without print-side determination, narrative velocity without sentiment). Signals that carry directional information contribute to Directional Lean. Signals that do not contribute only to Magnitude.
+This distinction is intrinsic to each signal type and does not change based on market conditions. Whether a signal feeds Lean is determined at the signal definition level, not at runtime.
+6.4 Families Applicable by Asset Class
+Not all families apply to all asset classes. The scoring engine normalizes for available family count per asset class to prevent systematic score compression for asset classes with fewer applicable families.
+Family
+	US Equities
+	Crypto
+	Fixed Income (future)
+	Commodities (future)
+	F01 Corporate Insider
+	Yes
+	—
+	Yes
+	—
+	F02 Governance & Political
+	Yes
+	Partial
+	Yes
+	Yes
+	F03 Litigation & Enforcement
+	Yes
+	Partial
+	Yes
+	—
+	F04 Options Market Structure
+	Yes
+	Partial
+	Yes
+	Yes
+	F05 Dark Pool & Off-Exchange
+	Yes
+	—
+	Yes
+	—
+	F06 Short Selling & Borrow
+	Yes
+	Partial
+	Yes
+	Yes
+	F07 Analyst & Sell-Side
+	Yes
+	Partial
+	Yes
+	Yes
+	F08 Disclosure & Filing Tempo
+	Yes
+	—
+	Yes
+	—
+	F09 Narrative & Media
+	Yes
+	Yes
+	Yes
+	Yes
+	F10 Social & Influencer
+	Yes
+	Yes
+	—
+	—
+	F11 Operational Side-Channels
+	Yes
+	Yes
+	—
+	Partial
+	F12 Calendar & Event Structure
+	Yes
+	Partial
+	Yes
+	Yes
+	F13 Futures & Institutional Positioning
+	Partial
+	Yes
+	Yes
+	Yes
+	F14 Crypto: On-Chain Capital
+	—
+	Yes
+	—
+	—
+	F15 Crypto: Project Operations
+	—
+	Yes
+	—
+	—
+	F16 Crypto: Social Coordination
+	—
+	Yes
+	—
+	—
+	F17 Prediction & Belief Markets
+	Partial
+	Partial
+	—
+	—
+	F18 Cross-Asset Correlation
+	Yes
+	Yes
+	Yes
+	Yes
+	F19 Credit & Fixed Income
+	Partial
+	—
+	Yes
+	—
+	F20 Commodity & Physical Supply
+	Partial
+	—
+	—
+	Yes
+	US Equities: 15–17 applicable families. Crypto: 10–13. Fixed Income (future): 12–14. Commodities (future): 8–10.
+________________
+
+
+7. The Three Scoring Components
+The IALD Score is the synthesis of three independently derived components, each measuring a distinct property of the behavioral evidence. The components are computed in parallel, not sequentially. No component depends on the output of another.
+7.1 Component 1: Asymmetry Magnitude
+Question answered: How much total anomalous behavior exists around this security, regardless of direction?
+Inputs: Every active signal across all applicable families for the security, both directional and non-directional. Each signal arrives as a z-score relative to its own baseline distribution (established by Tempo for that security, or by a global default baseline if Tempo data is insufficient).
+Computation logic: For each signal family with at least one active signal above the noise threshold, compute the family-level magnitude as the maximum z-score among active signals in that family. Taking the maximum rather than the sum prevents double-counting correlated signals within a family. Across families, compute the aggregate magnitude as a function of the individual family magnitudes, weighted by a calibration weight per family.
+The cross-family aggregation is additive in nature (independent evidence accumulates) but subject to diminishing returns. The eighth corroborating family adds less marginal magnitude than the third. The specific functional form — linear sum with soft ceiling, logarithmic scaling, or logistic compression — is a calibration decision to be resolved through backtesting. The requirement is that aggregate magnitude is monotonically increasing in the number of contributing families and in the strength of individual family contributions.
+Output: A non-negative scalar representing total detected anomalous behavior intensity. Zero means no anomalous behavior detected above noise. The scale is open-ended during internal computation and normalized to a bounded range during score composition (§8).
+7.2 Component 2: Directional Lean
+Question answered: Of the signals that carry directional information, which way does the aggregate evidence point?
+Inputs: Only signals classified as directional. Each directional signal contributes a signed value: positive for bullish behavioral evidence, negative for bearish. The magnitude of the signed value reflects the signal's z-score strength.
+Computation logic: Within each family that contributes directional signals, compute the net directional weight as the signed sum of active directional signals. Across families, compute the aggregate lean as the weighted mean of family-level directional weights, weighted by family calibration weight.
+Lean is normalized to [-1, +1], where +1 represents unanimous bullish evidence across all contributing families, -1 represents unanimous bearish evidence, and 0 represents either no directional information or perfectly balanced opposing evidence.
+Output: A scalar in [-1, +1]. The sign indicates direction. The absolute value indicates the strength of directional consensus among directional signals only.
+Critical distinction: Lean reflects direction among signals that carry directional information. It does not reflect the proportion of all signals that are directional. A security could have high Magnitude (many anomalous signals from many families) with zero Lean (none of the anomalous signals carry directional information, or directional signals balance). This is not a contradiction — it means something anomalous is happening but the direction is indeterminate from available evidence.
+7.3 Component 3: Agreement
+Question answered: Do the independent signal families corroborate each other's directional evidence?
+Inputs: The family-level directional weights computed during Lean calculation. Only families that contribute at least one directional signal are included.
+Computation logic: Agreement measures the coherence of directional evidence across independent families. It assesses what fraction of directionally-contributing families agree with the aggregate Lean direction, weighted by the confidence of each family's directional contribution.
+Agreement is normalized to [0, 1]. An Agreement of 1.0 means every family with directional evidence agrees. An Agreement near 0.0 means families are evenly split. Agreement is undefined (set to a neutral default, e.g., 0.5) when fewer than two families contribute directional evidence, since coherence requires at least two independent measurements.
+Output: A scalar in [0, 1]. High Agreement amplifies the influence of Lean on the final score. Low Agreement attenuates it.
+The contested conviction case: High Magnitude with low Agreement is a distinct and operationally important state. It means: many independent families detect anomalous behavior (something is happening), but directional signals conflict across families (informed participants disagree about direction). This is not noise — it is genuine contested conviction, and it often precedes a resolution event where the score moves sharply in the winning direction. The scoring model preserves this information rather than collapsing it into a neutral score. The contested conviction state is surfaced through the API decomposition and triggers a specific Conductor posture (Contested Conviction Alert).
+________________
+
+
+8. Score Composition Function
+8.1 The Formula
+The customer-facing IALD Score is a single number on a 0–100 scale, centered at 50:
+IALD Score = 50 + (Normalized_Magnitude × Lean × Agreement_Factor)
+Where:
+Normalized_Magnitude is the Asymmetry Magnitude output scaled to a [0, 50] range through a compression function. The compression ensures the score cannot exceed [0, 100] boundaries regardless of how many families contribute or how extreme individual signals become. The compression function form (logistic, tanh, or piecewise linear) is a calibration parameter.
+Lean is the [-1, +1] Directional Lean output. The sign determines whether the score moves above or below 50.
+Agreement_Factor is a monotonically increasing function of the [0, 1] Agreement output, bounded in [agreement_floor, 1.0]. The floor prevents Agreement from zeroing out the score entirely when directional evidence is contested. Suggested initial floor: 0.3.
+8.2 What the Score Measures
+Score Range
+	Label
+	Meaning
+	48–52
+	Efficient
+	Magnitude near zero. No detectable anomalous behavior. Market functioning normally.
+	52–65 / 35–48
+	Low Conviction
+	Some anomalous behavior. Fewer than 3 contributing families or weak magnitudes. Watch list.
+	65–80 / 20–35
+	Moderate Conviction
+	Multiple independent families showing directionally coherent anomalous behavior.
+	80–100 / 0–20
+	High Conviction
+	Overwhelming behavioral coherence across many families. Strongly suggests asymmetric information being acted upon.
+	8.3 What the Score Does Not Measure
+The following are explicit exclusions. The IALD Score has no relationship to these quantities:
+Expected price movement magnitude. A score of 90 does not indicate a larger expected price change than a score of 70. Both indicate behavioral conviction. The magnitude of any eventual price movement is a function of the underlying information, which IALD does not and cannot assess.
+Fundamental valuation. The score is not an upgrade or downgrade. It contains no opinion about fair value.
+Correctness of informed participants. The score measures that apparently informed actors are behaving with directional conviction. It does not validate their thesis. They may be wrong. An insider could trade on information that ultimately proves incorrect. The IALD Score would still reflect the genuine behavioral anomaly.
+Timing of price movement. The score reflects current behavioral conditions. It does not predict when the market will respond. The Cascade provides the temporal context that the score alone cannot.
+8.4 Boundary Conditions
+Zero Magnitude. Score is 50 regardless of Lean or Agreement. No anomalous behavior means no basis for a directional score. Mathematically: 50 + (0 × anything × anything) = 50.
+High Magnitude, zero Lean. Anomalous behavior exists across multiple families, but no directional information is available or directional signals perfectly cancel. Score remains near 50 because Lean is near zero. This is mathematically correct but experientially misleading — the customer sees "50" and thinks "nothing happening." Resolution: surface Magnitude as a separate visible indicator via the API decomposition; trigger Contested Conviction alert through Conductor when Magnitude exceeds threshold with near-zero Lean. The scoring formula is correct; the display layer carries the nuance.
+High Magnitude, high Lean, low Agreement. Multiple families detect anomalies. Directional evidence exists and leans one way, but not all families agree. The Agreement_Factor attenuates the score but does not zero it out (floor at 0.3). The customer sees a moderate score with a low Agreement qualifier via decomposition. This is the "leaning but uncertain" state.
+Single-family detection. Only one family contributes signals. Agreement is set to its neutral default (0.5). The score reflects single-source detection with appropriately conservative magnitude. This is watch list territory — not enough independent evidence for high conviction.
+Asset class normalization. Crypto assets access fewer families than equities (~10–13 vs ~15–17). Without normalization, crypto scores would be systematically compressed. The Magnitude normalization accounts for the number of applicable families per asset class, ensuring equivalent behavioral evidence intensity produces equivalent score ranges across asset classes.
+________________
+
+
+9. Tempo Integration with Scoring
+Tempo is the contextualization service. It does not compute scores. It provides the baselines and z-scores that the scoring engine consumes.
+9.1 What Tempo Provides
+Per-signal z-scores against security-specific baselines. When Tempo has a mature baseline for the security and event category, each raw signal value is transformed into a z-score relative to that security's historical distribution. The z-score is the input to the scoring engine — not the raw signal value.
+Per-signal z-scores against cohort baselines, through each applicable lens. The same signal is independently evaluated against each cohort lens. A filing tempo anomaly may be +0.8σ self-relative and +2.1σ relative to the regulatory exposure cohort. Both values are available.
+Baseline confidence flags. When a baseline is immature (new coverage), in recalibration (structural break detected), or based on insufficient history, Tempo attaches a reduced-confidence flag. The scoring engine uses this flag to attenuate the signal's weight contribution.
+9.2 How the Scoring Engine Uses Tempo
+The scoring engine selects the maximum z-score across the self-relative and all cohort-relative evaluations for each signal. Rationale: if a signal is unremarkable self-relative but highly anomalous through one cohort lens, the anomaly is real — it is simply visible only through the lens that captures the relevant business dimension. Taking the maximum preserves information. Taking the average or minimum would suppress genuine anomalies.
+Signals without Tempo context (no baseline available) use global category baselines and receive reduced-confidence attenuation.
+9.3 Structural Break Handling
+When Tempo detects a structural break for a security, affected signal categories enter recalibration. During recalibration (default: 60 days), the scoring engine reduces the weight of signals in recalibrating categories by an attenuation factor (suggested initial: 0.5x). This prevents false positives from legitimate behavioral changes (new CFO, merger, disclosure practice changes) while retaining some sensitivity to genuine anomalies during the transition period.
+________________
+
+
+10. Calibration and Validation Constraints
+The scoring logic contains parameters that cannot be specified from first principles. They require empirical calibration.
+10.1 Parameters Requiring Calibration
+Parameter
+	Role
+	Calibration Method
+	Per-family calibration weights
+	Relative contribution of each family to Magnitude and Lean aggregation
+	Walk-forward testing
+	Magnitude compression function
+	Shape of mapping from raw magnitude to [0, 50]
+	Fit to historical score distributions
+	Agreement floor
+	Minimum Agreement_Factor value
+	Sensitivity analysis on false positive/negative rates
+	Noise threshold per signal
+	Z-score below which a signal is not considered active
+	ROC analysis per signal against confirmed events
+	Structural break attenuation factor
+	Weight reduction during Tempo recalibration
+	False positive rate analysis during known breaks
+	Asset class family normalization
+	Adjustment to equalize score range across asset classes
+	Cross-asset score distribution comparison
+	10.2 Non-Negotiable Calibration Rules
+Walk-forward only. Parameters are optimized on a training window and validated on a subsequent out-of-sample window. In-sample performance metrics are labeled IN-SAMPLE and are not used for production weight setting.
+Point-in-time data reconstruction. Every backtested signal must reflect only data available at the moment the signal would have fired. No look-ahead. This is the single most important anti-cheating mechanism in the calibration process.
+Survivorship bias controls. Backtesting must include delisted, bankrupt, and failed securities in the test universe.
+Signal attribution per trade. Every backtested outcome must be decomposed into contributing signals and families. Calibration adjusts weights based on which families actually contributed predictive value.
+10.3 Validation Criteria
+The scoring model is considered valid when, on out-of-sample walk-forward tests:
+* True positive rate for confirmed asymmetry events exceeds 60%
+* False positive rate remains below 30%
+* More than 50% of true positive detections involve multiple independent families
+* Score distributions differ statistically significantly between pre-event windows of confirmed asymmetry events and a matched control sample (p < 0.05)
+These criteria are inherited from the v1 Foundation and are not modified.
+________________
+
+
+11. Success Criteria
+11.1 Minimum Viable Success
+1. Detection methodology fully specified using only public data sources
+2. Backtesting against historical confirmed-asymmetry events yields true positive rate statistically significantly above chance (p < 0.05)
+3. False positive rate below 40%
+4. At least three signal families demonstrate individual predictive value (updated from v1's "one signal category")
+11.2 Target Success
+1. All minimum criteria met
+2. True positive rate exceeds 60%
+3. False positive rate below 30%
+4. Multiple signal families demonstrate predictive value across both equity and crypto asset classes
+5. Signal convergence (Agreement component) demonstrably improves confidence over individual families
+6. Detection latency falls within 8–72 hour window for majority of true positives
+7. Three-component decomposition (Magnitude, Lean, Agreement) provides operationally distinct information vs. a single composite score
+11.3 Stretch Success
+1. All target criteria met
+2. Methodology reproducible by independent parties
+3. Framework generalizes across equities, crypto, and at least one additional asset class
+4. Cascade chain type detection operational, with at least 3 chain types empirically validated
+5. Real-time detection prototype operational with sub-hour latency
+6. Window estimation (via Tempo + Cascade) demonstrates predictive accuracy above baseline
+________________
+
+
+12. Ethical Framework
+12.1 Legal Compliance
+Absolute constraints:
+* No acquisition or use of material non-public information
+* No trading recommendations constituting unlicensed investment advice
+* No facilitation of market manipulation
+* Full compliance with securities law in all jurisdictions
+* All data legally obtainable and publicly available or properly licensed
+12.2 Ethical Boundaries
+The project will not:
+* Identify specific individuals as insider traders (leave to regulators)
+* Provide real-time trading signals designed to front-run other participants
+* Create tools designed for pump-and-dump or rug pull detection that could be inverted to execute such schemes
+* Generate outputs that advantage institutional actors over retail
+The project will:
+* Document methodology transparently
+* Acknowledge limitations and uncertainty
+* Consider second-order effects of detection capability
+* Prioritize detection approaches that level information playing fields
+12.3 Dual-Use Concern
+Detection methodologies can theoretically be inverted: a system that detects manipulation could teach manipulation. The cascade chain type taxonomy (CT-10: Pump-and-Dump) makes this explicit — we document the diagnostic signature so we can detect it, while avoiding granular playbook-style documentation of execution mechanics.
+Mitigation: focus on detection existence rather than execution mechanics. The scoring system detects that anomalous behavior is occurring and measures its intensity and direction. It does not explain how to create that behavior.
+12.4 The Informed-but-Wrong Principle
+The IALD Score accurately measures behavioral anomalies regardless of whether the underlying information proves correct. Informed participants can be wrong. A deal can fall through. An earnings estimate can be based on flawed data. A regulatory action can be reversed. The score faithfully reflects the behavioral conviction that existed at detection time. This is an epistemological feature, not a limitation — it means the score is a reliable measure of observed behavior, not a speculative claim about outcomes.
+________________
+
+
+13. Known Limitations
+13.1 Data Limitations
+Public data gaps: Options flow data is delayed (~15 min). Dark pool reporting is aggregated and delayed (~24h). Order book depth not available without institutional subscriptions. High-frequency activity invisible at public data granularity.
+Coverage limitations: Prediction markets have limited liquidity on most events. Some securities have minimal analyst coverage or peer comparables. International markets have varying disclosure requirements. Three signal families (F16, F19, F20) are not yet built.
+13.2 Methodological Limitations
+Hindsight bias: Historical backtesting suffers from survivorship bias — we study cases where asymmetry was confirmed, not cases where it existed but was never detected. Walk-forward testing and survivorship controls mitigate but do not eliminate this.
+Adversarial adaptation: If detection methodology becomes known, sophisticated actors may adapt concealment strategies, reducing signal amplitude. The anomaly-detection approach (vs. signature-based) provides some robustness, but the arms race is real.
+Base rate problem: If information asymmetry is endemic (A1), then "detection" may confirm the universal condition rather than identify specific actionable instances. The scoring model addresses this through Tempo baselines — anomalous relative to this security's own history is more actionable than anomalous in absolute terms.
+Attribution problem: Detection of anomaly does not prove asymmetry. Legitimate superior analysis can produce identical signals. The scoring model is explicitly agnostic about this distinction — it measures behavioral conviction, not information provenance.
+Independence approximation: The 20-family independence assumption is an approximation. All market signals share correlation through the common factor of price. If a macro event moves all families simultaneously, Agreement will be high but the convergence is not evidence of asymmetry — it's evidence of a market-wide shock. Tempo's cohort-level event detection partially addresses this by identifying sector-wide vs. security-specific deviations.
+13.3 Operational Limitations
+Resource constraints: No budget for institutional data. No HFT infrastructure. Limited computational resources. Small team capacity. Local AI infrastructure (GMKtec EVO-X2, ASUS Ascent GX10) supplements but does not replace cloud compute.
+Latency constraints: Public data delays (15–20 minutes for options, T+1 for some filings). Processing latency with cron-based architecture. Sub-minute collection may be required for crypto cascade detection (CT-05) but is not yet implemented.
+Family maturity asymmetry: The 20 families are at vastly different maturity levels. F02 (Governance) has 23 production signals. F16 (Crypto Social), F19 (Credit), F20 (Commodity) have zero. Score quality will vary by security depending on which families are applicable and mature for that asset class.
+________________
+
+
+14. Open Design Decisions
+14.1 Magnitude Compression Function Form
+Three candidates: logistic (S-curve, natural saturation, two free parameters), hyperbolic tangent (similar shape, single parameter, faster computation), piecewise linear (transparent, easy to explain, no smooth saturation). Backtesting determines which produces the most operationally useful score distribution.
+14.2 Equal vs. Performance-Weighted Family Weights
+Equal weighting is simpler and more defensible. Performance weighting introduces a claim that some data sources are inherently more predictive. The v1 scorer uses performance-derived tier weights (S through X, 1.70x down to 0.30x) which has worked but creates calibration maintenance burden. The initial v2 build should support both modes and compare them in walk-forward testing.
+14.3 Lean Contribution from Partial-Directional Families
+Families F05 (Dark Pool) and F06 (Short Selling) contain both directional and non-directional signals. Accumulation vs. distribution patterns in dark pool prints carry directional information; volume-only signals do not. Borrow rate changes can imply directional positioning; spread widening does not. The implementation must handle per-signal directional classification within a family, not per-family classification.
+14.4 The High-Magnitude Zero-Lean Display Problem
+When Magnitude is high but Lean is zero, the score is 50 — identical to "nothing is happening." The formula is correct (no directional evidence = no directional score), but the customer experience is wrong. Options: display Magnitude as a separate visual element alongside the score, use different visual treatment for "active 50" vs. "quiet 50," add a magnitude band indicator. This is a product design decision, not a scoring logic decision. The scoring engine exposes all three components via API; the display layer determines presentation.
+14.5 Agreement Threshold with 20 Families
+The v1 scorer awarded an independence multiplier at 4+ active clusters out of ~18 clusters. With 20 families organized differently, the Agreement calculation needs recalibration. Getting 6 of 20 families to agree is proportionally different from 6 of 8. The threshold for "high Agreement" and the shape of the Agreement → Agreement_Factor function must be empirically determined.
+14.6 Cascade Interaction with Scoring (Architectural)
+The Score and Cascade are orthogonal. But the cascade chain type (CT-01 through CT-10) carries information about the reliability of the score at that cascade stage. A high IALD Score at CT-05 (Crypto Rug Pull) means something different operationally than a high IALD Score at CT-01 (Full Regulatory Cascade) — the window, the participant profile, and the appropriate response differ. This context is Conductor's job, not the scorer's. But the question of whether cascade context should feed back into score confidence (not the score itself, but a confidence interval around it) is unresolved.
+________________
+
+
+Document Revision History
+Version
+	Date
+	Author
+	Changes
+	1.0
+	2026-01-08
+	JP/Claude
+	Initial draft — research foundation
+	2.0
+	2026-02-07
+	JP/Claude
+	Refactored for scoring focus. 20-family taxonomy. Three-component scoring model. Tempo integration contract. Updated assumptions with validation status. New hypotheses H6, H7. Vocabulary discipline. Cascade and product concerns moved to their own documents.
+	________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

@@ -1,0 +1,513 @@
+﻿SignalDelta — Signal Family to Cascade Stage Mapping
+Version 1.0 DRAFT | February 7, 2026
+Supersedes: Scoring Logic Specification v1 §6.2
+________________
+
+
+1. Locked Signal Family Taxonomy (20 Families)
+ID
+	Family
+	Collection Status
+	F01
+	Corporate Insider Behavior
+	Active
+	F02
+	Governance & Political Intelligence
+	Active
+	F03
+	Litigation & Enforcement
+	Active
+	F04
+	Options Market Structure
+	Active
+	F05
+	Dark Pool & Off-Exchange Execution
+	Active
+	F06
+	Short Selling & Borrow Infrastructure
+	Active
+	F07
+	Analyst & Sell-Side Networks
+	Active
+	F08
+	Disclosure & Filing Tempo
+	Active
+	F09
+	Narrative & Media Propagation
+	Partial
+	F10
+	Social & Influencer Coordination
+	Partial
+	F11
+	Operational Side-Channels
+	Mixed
+	F12
+	Calendar & Event Structure
+	Active
+	F13
+	Futures & Institutional Positioning
+	Active
+	F14
+	Crypto: On-Chain Capital Flow
+	Active
+	F15
+	Crypto: Project Operations & Contract Risk
+	Partial
+	F16
+	Crypto: Social Coordination Layer
+	Not Built
+	F17
+	Prediction & Belief Markets
+	Active
+	F18
+	Cross-Asset Correlation Structure
+	Probationary
+	F19
+	Credit & Fixed Income Signals
+	Not Built
+	F20
+	Commodity & Physical Supply Chain
+	Not Built
+	________________
+
+
+2. Cascade Stage Reference
+For clarity, the six epistemological states:
+Stage
+	Name
+	What It Means
+	Observable Through
+	S0
+	Private Cognition
+	Information exists in human minds or restricted documents
+	Theoretically undetectable; behavioral side-effects create transitions
+	S1
+	Institutional Process
+	Information has entered organizational workflows
+	Compliance activity, regulatory filings, legal process initiation
+	S2
+	Infrastructure Response
+	Information has changed market rules/parameters
+	Margin changes, borrow rates, spread widening, IV shifts
+	S3
+	Capital Commitment
+	Information has been converted into positions
+	Options flow, dark pool prints, on-chain movement, short interest
+	S4
+	Narrative Formation
+	Information compressed into communicable story
+	Media velocity, analyst notes, social acceleration
+	S5
+	Consensus Integration
+	Information fully reflected in price; window closed
+	Broad retail awareness, normalized behavioral patterns
+	________________
+
+
+3. Family-to-Stage Mapping (Many-to-Many)
+Each cell indicates whether the family provides evidence for that cascade stage, and in what capacity:
+* P = Primary evidence (this family is a defining signal for this stage)
+* S = Secondary evidence (this family can contribute but is not the primary indicator)
+* R = Retrograde evidence (this family fires after this stage, confirming it has passed)
+* — = No meaningful contribution
+Family
+	S0
+	S1
+	S2
+	S3
+	S4
+	S5
+	F01: Corporate Insider
+	S
+	P
+	—
+	P
+	—
+	—
+	F02: Governance & Political
+	S
+	P
+	—
+	S
+	—
+	—
+	F03: Litigation & Enforcement
+	—
+	P
+	—
+	—
+	S
+	—
+	F04: Options Market Structure
+	—
+	—
+	S
+	P
+	—
+	—
+	F05: Dark Pool & Off-Exchange
+	—
+	—
+	S
+	P
+	—
+	—
+	F06: Short Selling & Borrow
+	—
+	—
+	P
+	P
+	—
+	—
+	F07: Analyst & Sell-Side
+	—
+	S
+	—
+	—
+	P
+	S
+	F08: Disclosure & Filing Tempo
+	S
+	P
+	—
+	—
+	—
+	—
+	F09: Narrative & Media
+	—
+	—
+	—
+	—
+	P
+	P
+	F10: Social & Influencer
+	—
+	—
+	—
+	S
+	P
+	P
+	F11: Operational Side-Channels
+	S
+	S
+	—
+	—
+	—
+	—
+	F12: Calendar & Event Structure
+	—
+	—
+	—
+	S
+	—
+	R
+	F13: Futures & Institutional Positioning
+	—
+	—
+	P
+	P
+	—
+	—
+	F14: Crypto: On-Chain Capital Flow
+	—
+	—
+	—
+	P
+	—
+	—
+	F15: Crypto: Project Operations
+	S
+	S
+	—
+	S
+	—
+	—
+	F16: Crypto: Social Coordination
+	—
+	—
+	—
+	S
+	P
+	P
+	F17: Prediction & Belief Markets
+	—
+	—
+	—
+	P
+	—
+	S
+	F18: Cross-Asset Correlation
+	—
+	—
+	P
+	S
+	—
+	—
+	F19: Credit & Fixed Income
+	—
+	S
+	P
+	S
+	—
+	—
+	F20: Commodity & Physical Supply
+	S
+	—
+	—
+	—
+	—
+	—
+	Reading the table
+Columns tell you: for a given cascade stage, which families can provide evidence that this stage is active?
+* S1 (Institutional Process) draws primary evidence from F01, F02, F03, F08 and secondary from F07, F11, F15, F19. If you see signals from these families but not from S2/S3 families, you're in an early institutional cascade.
+* S3 (Capital Commitment) is the densest stage — eight families provide primary evidence. This is by design: capital commitment is the most observable stage because money moving leaves the most traces.
+* S0 (Private Cognition) shows secondary evidence from F01, F02, F08, F11, F15, F20. These are the "leakiest" families — the ones where S0 cognition creates behavioral side-effects before any institutional process begins. A CEO trading before anyone else knows, a congressional staffer's spouse trade, a filing tempo deviation from an internal decision not yet disclosed, a corporate jet diverting to a target company's headquarters.
+Rows tell you: for a given family, which stages does it illuminate?
+* F06 (Short Selling) is P for both S2 and S3. Borrow rate changes are infrastructure (S2). Short interest increases are capital commitment (S3). The family straddles the boundary because the prime broker system is simultaneously infrastructure and a vehicle for capital commitment.
+* F01 (Corporate Insider) is P for S1 and S3 but S for S0. The Form 4 filing itself is S1 (institutional process — the filing is the institutional record). But the transaction it reports is S3 (capital commitment — the insider moved money). And the timing anomaly (filing 48 hours after a board meeting) is weak S0 evidence (the insider knew something before the institutional process began).
+________________
+
+
+4. Cascade Chain Types
+A cascade chain type is a characteristic path through the stage graph that corresponds to a recognizable category of information asymmetry event. The path is defined by which stages show evidence, which stages are dark, and the ordering of stage activation.
+The chain type is diagnostic — it tells you what kind of event is probably driving the asymmetry without requiring knowledge of the event itself.
+4.1 Chain Type Definitions
+CT-01: Full Regulatory Cascade
+Path: S0 → S1 → S2 → S3 → S4 → S5 Description: Information originates in government/regulatory process, enters institutional compliance workflows, changes infrastructure parameters, drives capital commitment, then surfaces as narrative. Typical duration: 36–72 hours (longest window) Characteristic family activation sequence:
+1. F02 (Governance) and/or F03 (Litigation) fire — S1 evidence
+2. F06 (Short/Borrow) and/or F13 (Futures) shift — S2 evidence
+3. F04 (Options), F05 (Dark Pool) activate — S3 evidence
+4. F07 (Analyst), F09 (Media) follow — S4 evidence
+Diagnostic signature: S1 fires before S3. Institutional process evidence precedes capital commitment. This is the distinguishing mark — legitimate institutional cascades have a paper trail before the money moves.
+Families providing primary evidence: F02, F03, F08, F06, F13, F04, F05, F07, F09
+________________
+
+
+CT-02: Corporate Insider Cascade
+Path: S0 → S3 → S4 → S5 (S1 and S2 dark or late) Description: Individual(s) with private corporate knowledge trade directly, bypassing institutional channels. S1 may fire late (the Form 4 filing, which is the institutional record of the already-completed trade). S2 may fire as a consequence of S3 (large dark pool prints force market maker spread adjustments). Typical duration: 8–28 hours (compressed window) Characteristic family activation sequence:
+1. F01 (Insider) fires — S3 evidence via Form 4 transaction data
+2. F04 (Options), F05 (Dark Pool) may co-fire — S3 corroboration
+3. S1 evidence arrives after S3 — the filing is retrospective
+4. F09 (Media) breaks the story — S4
+Diagnostic signature: S3 fires with no preceding S1 or S2 evidence. Capital commitment without institutional process trail. The absence of S1 is itself the diagnostic — if an insider trades and there's no compliance trail, no regulatory filing activity, no infrastructure adjustment before the trade, the information didn't go through institutional channels. It went from brain to brokerage.
+Families providing primary evidence: F01, F04, F05, F09
+________________
+
+
+CT-03: M&A / Deal Leakage Cascade
+Path: S0 → S1(partial) → S3 → S2 → S4 → S5 Description: Deal process involves multiple institutional actors (banks, law firms, printers, regulators) who create S1 evidence, but the leakage to capital markets (S3) often precedes infrastructure adjustment (S2). Options flow and dark pool accumulation appear before borrow rates or margin adjustments. Typical duration: 24–72 hours Characteristic family activation sequence:
+1. F08 (Filing Tempo) shows anomaly — unusual proxy or 8-K amendment timing
+2. F11 (Operational) may fire — corporate jet to target HQ, law firm hiring spike
+3. F04 (Options), F05 (Dark Pool) activate heavily — S3
+4. F06 (Short/Borrow) adjusts — S2 (infrastructure responds to capital commitment, not the reverse)
+5. F09 (Media) publishes rumor — S4
+Diagnostic signature: S3 fires before S2. Capital commitment precedes infrastructure response. In regulatory cascades, infrastructure adjusts first (margin changes, borrow rates) and then capital commits within the new constraints. In deal leakage, the informed actors commit capital before infrastructure has adjusted, which is why the options flow appears anomalous — it's operating on pre-adjustment parameters.
+Families providing primary evidence: F01, F04, F05, F08, F11, F09
+________________
+
+
+CT-04: Media Leak / Journalist Source Cascade
+Path: S0 → S4 → S3 → S2 → S5 Description: Private information leaked directly to a journalist, bypassing all market infrastructure. No options anomaly, no dark pool signal, no institutional filing — just a headline. The cascade flows backwards from narrative into capital commitment and then infrastructure adjustment. Typical duration: 4–16 hours (very compressed — narrative travels fast) Characteristic family activation sequence:
+1. F09 (Media) fires first — S4 evidence before any S1/S2/S3
+2. F10 (Social) amplifies — S4/S5 acceleration
+3. F04 (Options), F05 (Dark Pool), F14 (On-Chain) react — S3 (responsive, not anticipatory)
+4. F06 (Short/Borrow), F13 (Futures) adjust — S2
+Diagnostic signature: S4 fires with no preceding S1, S2, or S3 evidence. This is the inverse of CT-02. In insider trading, capital moves before narrative. In media leaks, narrative arrives before capital. The family that fires first tells you the cascade direction.
+Families providing primary evidence: F09, F10, F04, F05, F06
+________________
+
+
+CT-05: Crypto Rug Pull / Project Abandonment Cascade
+Path: S0 → S3 → S5 (S1, S2, S4 largely dark) Description: Project team extracts value through on-chain capital movement, often with no institutional process, no infrastructure adjustment, and minimal narrative. By the time social channels react, the liquidity is gone. The cascade compresses S3 and S5 into near-simultaneity. Typical duration: Minutes to 4 hours Characteristic family activation sequence:
+1. F15 (Project Operations) may show precursor — GitHub silence, contract modification, lock expiration
+2. F14 (On-Chain Capital) fires — team wallet movement, liquidity removal, exchange deposit
+3. F16 (Crypto Social) erupts — S5 is almost immediate in crypto because the community monitors on-chain
+4. No S1 or S2 evidence — there are no institutional channels in anonymous DeFi
+Diagnostic signature: F14 and F15 fire with no F02, F03, F06, F07, F08, F09 activity. The absence of all traditional institutional families is the diagnostic. If the only families with signal are crypto-native, the event is crypto-native.
+Families providing primary evidence: F14, F15, F16
+________________
+
+
+CT-06: Earnings / Known-Catalyst Anticipation Cascade
+Path: S0 → S3 → S2 → S4 → S5 (S1 implicit — the earnings date is known) Description: The catalyst date is public. The information content (the actual numbers) is private. Informed actors position ahead of the known date, creating S3 evidence. Infrastructure adjusts (IV expansion, borrow rate changes approaching earnings) creating S2 evidence. Post-announcement, narrative and consensus follow immediately. Typical duration: 14–20 hours pre-event, with an abrupt cutoff at announcement Characteristic family activation sequence:
+1. F12 (Calendar) provides the timing context — known event approaching
+2. F04 (Options) shows unusual pre-event positioning — S3
+3. F06 (Short/Borrow) shows pre-event infrastructure shift — S2
+4. F01 (Insider) may show pre-quiet-period activity — S3/S0 boundary
+5. Post-event: F07 (Analyst), F09 (Media), F10 (Social) simultaneously — S4/S5 collapse
+Diagnostic signature: F12 fires early, providing the temporal frame. S3 and S2 evidence intensifies on a predictable trajectory as the event date approaches. The diagnostic distinction is that the timing is known — what's unknown is the content. Cascade velocity is therefore predictable: it accelerates as the event approaches and terminates abruptly at announcement.
+Families providing primary evidence: F12, F04, F06, F01, F07, F09
+________________
+
+
+CT-07: Credit Deterioration / Distress Cascade
+Path: S2 → S1 → S3 → S4 → S5 (S2 fires first) Description: Credit stress manifests in debt market infrastructure before equity markets react. CDS spreads widen, borrow rates spike, bond yields diverge from peers. Institutional process follows (rating agency reviews, lender covenant negotiations). Capital commitment in equity options and short selling follows the credit signal. Narrative arrives last. Typical duration: 48–168 hours (slow, multi-day) Characteristic family activation sequence:
+1. F19 (Credit) fires — CDS/bond spread anomaly — S2
+2. F06 (Short/Borrow) confirms — borrow rate spike, short interest increase — S2/S3
+3. F13 (Futures) shows positioning — S3
+4. F03 (Litigation) may fire — SEC inquiry, rating downgrade process — S1
+5. F04 (Options) shows late positioning — S3
+6. F09 (Media) publishes distress story — S4
+Diagnostic signature: S2 fires before S1 and S3. Infrastructure responds before institutional process is visible and before capital commits in equity derivatives. This is diagnostic of credit-originating events because debt markets price distress before equity markets do — the information enters through the credit channel, not the equity channel. The family that fires first (F19 or F06) identifies the channel.
+Families providing primary evidence: F19, F06, F13, F03, F04, F09
+Note: This chain type is not currently detectable — F19 is not built. When it is, this becomes a high-value differentiator because most equity-focused platforms don't monitor credit signals.
+________________
+
+
+CT-08: Geopolitical / Macro Cascade
+Path: S0 → S1 → S2 ↔ S3 → S4 → S5 (multi-channel, with S2↔S3 feedback loop) Description: Information propagates through multiple independent channels simultaneously. Government process, commodity markets, FX markets, credit markets, and equity markets all receive signal through different pathways. The cascade is wide rather than deep — many families fire at similar times rather than in sequence. The S2↔S3 feedback loop (positioning forces infrastructure adjustment, which forces more positioning) is characteristic of stress events. Typical duration: Highly variable (6–72+ hours, often with multiple peaks) Characteristic family activation sequence:
+1. F02 (Governance) and/or F20 (Commodity/Supply Chain) fire — S0/S1
+2. F13 (Futures), F18 (Cross-Asset), F19 (Credit) fire approximately simultaneously — S2
+3. F04 (Options), F05 (Dark Pool), F06 (Short) — S3, often with feedback into S2
+4. F09 (Media), F10 (Social) — S4/S5, but often interleaved with S3 because geopolitical events break publicly faster than deal or regulatory events
+Diagnostic signature: High family count with low temporal ordering. Multiple families fire within the same collection cycle rather than in sequence. Cross-Asset (F18) activity is the distinguishing marker — if equity, credit, FX, and commodity signals fire together, it's macro, not company-specific. The S2↔S3 feedback loop (borrow rates spiking → forced selling → more borrow rate pressure) is observable as oscillating infrastructure and capital commitment signals.
+Families providing primary evidence: F02, F13, F18, F19, F20, F04, F05, F06, F09, F10
+________________
+
+
+CT-09: Activist / Accumulation Cascade
+Path: S3(slow) → S1 → S4 → S3(acceleration) → S5 Description: An activist investor or strategic acquirer accumulates a position over weeks or months, creating a slow S3 signal. The 13D filing (S1) is the required disclosure. Narrative follows. Then a second wave of S3 as other investors pile in. Typical duration: Weeks for accumulation; 8–24 hours from 13D filing to consensus Characteristic family activation sequence:
+1. F05 (Dark Pool) shows persistent accumulation pattern — slow S3 over days/weeks
+2. F06 (Short/Borrow) may show declining short interest — S2 (fewer shares available to borrow)
+3. F08 (Filing Tempo) — Schedule 13D filed — S1
+4. F09 (Media), F07 (Analyst) react to 13D — S4
+5. F04 (Options), F05 (Dark Pool) — second wave S3 as followers position
+Diagnostic signature: S3 fires at low intensity for an extended period before S1. The temporal pattern is distinctive — slow accumulation followed by disclosure event followed by acceleration. The pre-disclosure S3 is detectable through F05 dark pool persistence (repeated same-direction blocks over multiple sessions) and F06 borrow rate compression.
+Families providing primary evidence: F05, F06, F08, F04, F07, F09
+________________
+
+
+CT-10: Pump-and-Dump / Coordinated Manipulation Cascade
+Path: S4 → S3 → S5 (manufactured — narrative creates capital commitment) Description: The cascade is intentionally manufactured. Narrative is seeded first (social media, influencer coordination, paid promotion) to create capital commitment from retail participants. The manipulator sells into the manufactured demand. S1 and S2 are absent because there is no institutional process or infrastructure response — the "information" is fabricated. Typical duration: Hours to 3 days (crypto), days to weeks (micro-cap equity) Characteristic family activation sequence:
+1. F10 (Social/Influencer) and/or F16 (Crypto Social) fire first — manufactured S4
+2. F14 (On-Chain) or F04 (Options) show retail inflow — S3 (responsive to narrative, not to information)
+3. F14 or F05 show insider/promoter selling into the inflow — counter-directional S3
+4. Price collapse — no S2, no S1, no institutional involvement
+Diagnostic signature: S4 fires before S3, and the S3 that follows is retail-profile, not institutional-profile. The absence of F01, F02, F03, F06, F07, F08, F13 is diagnostic — none of the institutional families participate. The counter-directional flow within F14 or F05 (promoter selling while retail buys) is the confirmation signal. Agreement will be low because the manipulator's direction opposes the retail direction.
+Families providing primary evidence: F10, F16, F14, F04, F05
+________________
+
+
+4.2 Chain Type Summary Matrix
+Chain Type
+	Path Signature
+	Key Diagnostic
+	Typical Window
+	Primary Families
+	F19/F20 Required
+	CT-01 Regulatory
+	S1→S2→S3→S4
+	S1 before S3
+	36–72h
+	F02,F03,F06,F13,F04,F05,F07,F09
+	No
+	CT-02 Insider
+	S3→(S1 late)→S4
+	S3 with no preceding S1/S2
+	8–28h
+	F01,F04,F05,F09
+	No
+	CT-03 Deal Leakage
+	S1(partial)→S3→S2→S4
+	S3 before S2
+	24–72h
+	F01,F04,F05,F08,F11,F09
+	No
+	CT-04 Media Leak
+	S4→S3→S2
+	S4 with no preceding S1/S2/S3
+	4–16h
+	F09,F10,F04,F05,F06
+	No
+	CT-05 Crypto Rug Pull
+	S3→S5
+	Only crypto families fire
+	min–4h
+	F14,F15,F16
+	No
+	CT-06 Earnings Anticipation
+	S3→S2→S4 (timed)
+	F12 provides temporal frame
+	14–20h
+	F12,F04,F06,F01,F07,F09
+	No
+	CT-07 Credit Distress
+	S2→S1→S3→S4
+	S2 before S1 and S3
+	48–168h
+	F19,F06,F13,F03,F04,F09
+	Yes (F19)
+	CT-08 Geopolitical/Macro
+	S1+S2+S3 simultaneous
+	High family count, low ordering
+	6–72h+
+	F02,F13,F18,F19,F20,F04,F05,F06
+	Yes (both)
+	CT-09 Activist Accumulation
+	S3(slow)→S1→S4→S3(fast)
+	Extended low-intensity S3 pre-S1
+	weeks→8–24h
+	F05,F06,F08,F04,F07,F09
+	No
+	CT-10 Pump-and-Dump
+	S4→S3→S5
+	S4 before S3; no institutional families
+	h–3d
+	F10,F16,F14,F04,F05
+	No
+	________________
+
+
+5. Implementation Notes
+5.1 The Many-to-Many Relationship
+You're right that this needs a config structure, not hardcoded logic. Each family-stage relationship carries metadata:
+* Evidence type (Primary / Secondary / Retrograde)
+* Confidence modifier — how much this family's signal at this stage should contribute to the stage's activation probability
+* Latency expectation — how long after the family fires should the stage be considered active
+* Decay — how long the stage evidence persists after the family signal decays
+Each chain type is a pattern-matching template over the stage activation map:
+* Required stage activations (which stages must show evidence)
+* Required absences (which stages must be dark — this is as diagnostic as presence)
+* Ordering constraints (which stages must fire before/after others)
+* Family constraints (which families must/must not contribute)
+* Temporal constraints (maximum elapsed time between stage activations)
+5.2 Chain Type Detection as Pattern Matching
+The cascade detector doesn't sequentially walk the stages. It observes which stages currently show evidence, which families are contributing that evidence, and what the temporal ordering was. Then it matches the observed pattern against the chain type templates.
+Multiple chain types can be partially matched simultaneously. The output is not "this is CT-03" but rather "CT-03 match: 0.72, CT-06 match: 0.45, CT-02 match: 0.18" — a probability distribution over chain types. As more evidence arrives, the distribution sharpens.
+The chain type with the highest match probability informs the window estimate — because each chain type has a characteristic duration distribution, the identified chain type narrows the temporal prediction.
+5.3 What This Changes in the Scoring Logic Spec
+The Scoring Logic Spec §6 (Cascade Interface with Scoring) needs to be updated to reference 20 families and the chain type concept. The key architectural point is preserved: the scoring engine and the cascade detector share inputs but produce independent outputs. The chain type is a cascade detector output, not a scoring engine output. Conductor consumes both.
+5.4 Config Structure (Sketch)
+The YAML config you're intuiting would need to capture at minimum:
+families:
+  F01:
+    name: Corporate Insider Behavior
+    cascade_stages:
+      S0: { evidence: secondary, confidence_mod: 0.6, latency_hours: 0 }
+      S1: { evidence: primary, confidence_mod: 1.0, latency_hours: 2 }
+      S3: { evidence: primary, confidence_mod: 1.0, latency_hours: 0 }
+
+
+chain_types:
+  CT-02:
+    name: Corporate Insider Cascade
+    required_active: [S3]
+    required_dark: [S1, S2]  # at time of S3 activation
+    ordering: S3 before S4
+    family_required: [F01]
+    family_absent: [F02, F03]  # no governance or litigation families
+    typical_window_hours: { p10: 8, p50: 18, p90: 28 }
+The required_dark field is the key innovation — it encodes the diagnostic power of absence. Insider cascades are identified not by what fires, but by what doesn't fire alongside the capital commitment.
+________________
+
+
+6. Open Questions
+Chain type granularity. 10 chain types is a starting taxonomy. Backtesting against historical events will reveal whether some of these are genuinely distinct or collapse into each other. CT-03 (Deal Leakage) and CT-02 (Insider) may be hard to distinguish in practice if the insider is a deal participant.
+Feedback loops. CT-08 includes the S2↔S3 feedback loop. The current stage model is a directed graph, but feedback loops make it cyclic. The detector needs to handle re-activation of previously observed stages without interpreting it as a new cascade.
+Crypto cascade timing. CT-05 has a "minutes to 4 hours" window, but the current IALD collection cycle may be too slow to catch it. The cron architecture discussed in the PRD open questions is directly relevant here — crypto cascades may require sub-minute collection for F14 and F15.
+Multi-cascade superposition. A company can simultaneously be subject to CT-01 (regulatory investigation) and CT-06 (approaching earnings). The detector must handle overlapping cascade patterns on the same security. The chain type probability distribution handles this naturally — both CT-01 and CT-06 would show nonzero probability — but the window estimate becomes ambiguous when two cascades with different timescales overlap.
+Chain type validation. Each chain type is a hypothesis. Validation requires historical events with confirmed information asymmetry, classified by event type, with full signal reconstruction at each timestamp. The backtesting framework in the PRD appendix must support chain-type-filtered analysis.
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

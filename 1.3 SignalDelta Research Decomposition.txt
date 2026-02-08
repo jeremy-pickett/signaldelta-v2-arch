@@ -1,0 +1,441 @@
+﻿research.py Decomposition — From 11K-Line Monolith to Composable Pipeline
+Version 1.0 DRAFT | February 8, 2026
+________________
+
+
+What It Does Today
+research.py is 11,268 lines. It is the hardest-working script on the platform, and it does everything:
+research.py
+├── IALD Scoring Engine (lines 462–7605)
+│   ├── Math utilities (time_decay, normalize, percentile conversion)
+│   ├── Signal extraction (42 _extract_*_signal methods, each 30-80 lines)
+│   ├── calculate_iald_score() — the v1 scorer (lines 4068–5618)
+│   ├── calculate_iald_score_v2() — the v2 scorer (lines 7834–8142)
+│   ├── Compound multiplier calculation
+│   ├── Independence scoring (correlation cluster analysis)
+│   ├── Dynamic weight adjustment (accuracy-based)
+│   └── Fundamental context multiplier
+│
+├── Data Gathering Layer (lines 1824–4067)
+│   ├── 40+ _get_* methods (each a SQL query, 10-40 lines)
+│   ├── ThreadPoolExecutor with 20 parallel workers
+│   ├── psycopg2 ThreadedConnectionPool (25 connections)
+│   └── Security type resolution, cohort name resolution
+│
+├── Report Generation (lines 8173–8366)
+│   ├── LLM prompt construction (~130 lines of prompt)
+│   ├── Security-type-specific prompt templating (6 asset classes)
+│   ├── Fallback chain (OpenAI → DeepSeek → Anthropic)
+│   └── TLDR extraction
+│
+├── HTML Rendering (lines 9501–11126)
+│   ├── generate_html_reliable() — programmatic markdown→HTML (~1,600 lines)
+│   ├── generate_html() — LLM-powered HTML (~300 lines, legacy)
+│   ├── Full CSS style system (glassmorphism, gradients, responsive)
+│   ├── SVG hero section with verdict visualization
+│   ├── Pithy observation generation (separate LLM call)
+│   └── Company color extraction and theming
+│
+├── Database Operations (lines 1105–1380)
+│   ├── Report metadata persistence (research_reports table)
+│   ├── IALD score history tracking (iald_score_history table)
+│   ├── Current score upsert (iald_scores table)
+│   ├── Research progress tracking (research_progress table)
+│   └── Version management and archiving
+│
+├── Notification System (lines 1384–1746)
+│   ├── Score change alert generation (per-user alerts)
+│   ├── Slack Block Kit notifications (score changes)
+│   ├── Slack completion notifications
+│   └── Signal-to-plain-English translation (30+ translations)
+│
+├── File Management (lines 948–1034)
+│   ├── Report archiving (ticker/year/month/timestamp structure)
+│   ├── Atomic file writes (temp file → rename)
+│   ├── Content hashing for change detection
+│   └── Logo and CSS asset loading
+│
+├── Security Type Configuration (lines 107–340)
+│   ├── 6 asset class configs (equity, crypto, commodity, sovereign_currency, cbdc, prediction_market)
+│   ├── Per-type prompt sections (governance, legal, terminology exclusions)
+│   └── Headline hooks per asset type
+│
+└── Style Guide (lines 346–431)
+    └── 85 lines of CSS typography, spacing, and layout rules as a Python string constant
+The fundamental problem: This file has at least 7 distinct responsibilities jammed into one class. Every change to scoring requires touching the same file as HTML rendering. Every new signal type adds another _extract_* method AND another _get_* method AND more lines to calculate_iald_score(). The file grows monotonically because there's nowhere else for new code to go.
+________________
+
+
+What It Should Be
+Seven modules, each with a single responsibility:
+research/
+├── __init__.py                    # Pipeline orchestrator
+├── data_collector.py              # Phase 1: Gather data from DB
+├── scorer.py                      # Phase 2: Calculate IALD score
+├── signal_extractors/             # Phase 2b: Per-signal extraction
+│   ├── __init__.py
+│   ├── insider.py                 # Congressional, insider, Form 4
+│   ├── market_structure.py        # Options, dark pool, short interest
+│   ├── sentiment.py               # News, social, Reddit, prediction markets
+│   ├── governance.py              # Board, litigation, SEC filings
+│   ├── crypto.py                  # On-chain, DeFi, team, protocol
+│   └── calendar.py                # Earnings, unlocks, splits, COT
+├── report_generator.py            # Phase 3: LLM prompt + generation
+├── html_renderer.py               # Phase 4: Markdown → styled HTML
+├── persistence.py                 # Phase 5: DB writes, archiving
+├── notifications.py               # Phase 6: Alerts, Slack
+├── asset_configs.py               # Security type configurations
+└── style_guide.py                 # CSS and visual constants
+Module Responsibilities
+data_collector.py (~800 lines → separate file)
+* All 40+ _get_* methods
+* ThreadPoolExecutor parallel data gathering
+* Connection pool management
+* Input: ticker + security_id
+* Output: dict of all gathered data (the current self.security_data)
+scorer.py (~600 lines → separate file)
+* calculate_iald_score() and calculate_iald_score_v2()
+* determine_verdict()
+* Compound multiplier, independence scoring, dynamic weights
+* Fundamental context multiplier
+* Input: gathered data dict
+* Output: ScoringResult (score, verdict, signals list, contributions, metadata)
+signal_extractors/ (~2,500 lines → 6 files)
+* All 42 _extract_*_signal methods, organized by domain
+* Each extractor takes raw data and returns (contribution, signal_description)
+* The scorer calls extractors; extractors don't know about the scorer
+* Adding a new signal = adding one method to the appropriate extractor file
+report_generator.py (~400 lines → separate file)
+* Prompt construction
+* LLM API call with fallback chain (→ uses LLM Gateway from API v2)
+* TLDR extraction
+* Context preparation (_prepare_context)
+* Input: gathered data + scoring result
+* Output: markdown string
+html_renderer.py (~1,800 lines → separate file)
+* generate_html_reliable() — the programmatic markdown→HTML pipeline
+* CSS style system
+* Hero section construction
+* Verdict visualization (SVG)
+* Company color extraction
+* Pithy observation generation (→ uses LLM Gateway)
+* Input: markdown string + scoring result + security metadata
+* Output: HTML string
+persistence.py (~400 lines → separate file)
+* _save_report_to_db()
+* _save_iald_score_history()
+* _update_current_iald_score()
+* _update_research_progress()
+* Report archiving and file management
+* Atomic file writes
+* Input: markdown, HTML, scoring result, paths
+* Output: report_id, file paths
+notifications.py (~400 lines → separate file)
+* Score change alert generation
+* Slack notifications (score change + completion)
+* Signal-to-plain-English translation
+* Input: scoring result, previous score, security metadata
+* Output: alerts created, notifications sent
+________________
+
+
+The Pipeline
+# research/__init__.py
+
+
+class ResearchPipeline:
+    """Orchestrates the research report generation pipeline."""
+
+
+    def __init__(self, ticker: str, security_type: str = None):
+        self.ticker = ticker.upper()
+        self.security_type = security_type
+        self.config = get_asset_config(security_type)
+    
+    async def run(self) -> ReportResult:
+        """Execute the full research pipeline."""
+        
+        # Phase 1: Collect data
+        data = await DataCollector(self.ticker).gather()
+        
+        # Phase 2: Score
+        scoring = Scorer().calculate(data)
+        
+        # Phase 3: Generate report (LLM)
+        markdown = await ReportGenerator(self.config).generate(
+            data=data,
+            scoring=scoring,
+        )
+        
+        # Phase 4: Render HTML
+        html = HtmlRenderer(self.config).render(
+            markdown=markdown,
+            scoring=scoring,
+            metadata=data.security,
+        )
+        
+        # Phase 5: Persist
+        result = await Persistence().save(
+            ticker=self.ticker,
+            markdown=markdown,
+            html=html,
+            scoring=scoring,
+            data=data,
+        )
+        
+        # Phase 6: Notify
+        await Notifications().process(
+            ticker=self.ticker,
+            scoring=scoring,
+            result=result,
+        )
+        
+        return result
+What This Enables
+Independent testing. Each module can be tested in isolation. Today, testing the scorer requires instantiating the entire SecurityResearcher class with a database connection, LLM clients, and file system access.
+Independent deployment. The scorer can run without the HTML renderer. The data collector can run without the notification system. This matters for:
+* API endpoints that need a score but not a full report
+* Batch scoring (score 2000 securities without generating HTML)
+* Score-only updates (Conductor needs scores, not reports)
+Independent development. Adding a new signal extractor doesn't touch the scorer, the renderer, or the notification system. Adding a new asset type config doesn't touch the data collector.
+LLM Gateway integration. report_generator.py and html_renderer.py call the LLM Gateway from the API v2 spec instead of hardcoding OpenAI/Anthropic/DeepSeek clients. Adding a local model = database config change, not code change.
+Async conversion. The current script uses synchronous psycopg2 + ThreadPoolExecutor. The v2 modules use asyncpg (same pool as the API server). The data collector's parallel gathering becomes native asyncio.gather() instead of thread pool hacks.
+________________
+
+
+Scoring Architecture Decision: Where Does Scoring Live?
+Today, research.py contains the scorer. But iald_scorer_v3.py also exists as a standalone collector. These two scorers share constants (imported from iald_scorer_v3) but have divergent logic.
+The right answer: Scoring is a core service, not part of the report generator. The Product Architecture defines SignalDelta Score as Pillar 1. The scorer should be:
+1. A standalone service (services/scorer.py or scoring/ module)
+2. Callable from multiple entry points:
+   * Research pipeline (full report generation)
+   * API endpoint (score-only, no report)
+   * Conductor (score evaluation for strategy decisions)
+   * Batch scorer (nightly scoring of all securities)
+3. Single source of truth. No more two scorers with different logic. One scorer, one set of weights, one set of thresholds.
+Before (v1):
+  research.py::calculate_iald_score()     ← scorer A (inline)
+  iald_scorer_v3.py::calculate_score()    ← scorer B (standalone)
+  Both import weights from iald_scorer_v3, but apply them differently
+
+
+After (v2):
+  scoring/engine.py::ScoreEngine.calculate()   ← THE scorer
+  ├── Used by: research pipeline
+  ├── Used by: API score endpoint
+  ├── Used by: Conductor strategy evaluation
+  └── Used by: batch scoring job
+________________
+
+
+Data Collector: From 40 Sequential Queries to Declarative Data Plan
+The current data collector has 40+ methods that each execute a SQL query. These are registered as tasks in gather_data() and run in parallel via ThreadPoolExecutor. This works but is hard to maintain — adding a new data source requires:
+1. Write a _get_new_thing() method
+2. Add it to the task list in gather_data()
+3. Hope the thread pool has capacity
+v2 approach: Declarative data plan.
+# research/data_collector.py
+
+
+@dataclass
+class DataQuery:
+    key: str                    # Where to store in result dict
+    query: str                  # SQL query
+    params: Callable            # Function returning query params
+    asset_types: set = None     # Only run for these asset types (None = all)
+    required: bool = False      # Fail pipeline if this query fails?
+
+
+DATA_PLAN: list[DataQuery] = [
+    DataQuery(
+        key="prices",
+        query="SELECT ... FROM price_history WHERE security_id = $1 ORDER BY price_time DESC LIMIT 30",
+        params=lambda ctx: (ctx.security_id,),
+    ),
+    DataQuery(
+        key="insider_trades",
+        query="SELECT ... FROM insider_trades WHERE security_id = $1 ORDER BY transaction_date DESC LIMIT 20",
+        params=lambda ctx: (ctx.security_id,),
+        asset_types={"equity"},
+    ),
+    DataQuery(
+        key="whale_transactions",
+        query="SELECT ... FROM whale_transactions WHERE security_id = $1 ORDER BY detected_at DESC LIMIT 20",
+        params=lambda ctx: (ctx.security_id,),
+        asset_types={"crypto"},
+    ),
+    # ... 40+ more entries
+]
+
+
+class DataCollector:
+    async def gather(self, ticker: str, asset_type: str) -> dict:
+        # Filter to relevant queries for this asset type
+        relevant = [q for q in DATA_PLAN if q.asset_types is None or asset_type in q.asset_types]
+        
+        # Execute all queries in parallel
+        results = await asyncio.gather(*[
+            self._execute_query(q) for q in relevant
+        ], return_exceptions=True)
+        
+        # Assemble result dict
+        data = {}
+        for query, result in zip(relevant, results):
+            if isinstance(result, Exception):
+                logger.warning(f"Query '{query.key}' failed: {result}")
+                if query.required:
+                    raise result
+                data[query.key] = []
+            else:
+                data[query.key] = result
+        
+        return data
+Adding a new data source = adding one DataQuery entry. No method to write, no task list to update. The parallel execution is automatic.
+________________
+
+
+Signal Extractors: From 42 Methods to a Registry
+The 42 _extract_*_signal methods follow an identical pattern: take data, apply thresholds, return (contribution, description). They should be a registry of pluggable extractors:
+# research/signal_extractors/__init__.py
+
+
+@dataclass
+class SignalResult:
+    signal_type: str
+    contribution: float        # -1.0 to +1.0
+    weight: float              # from SIGNAL_WEIGHTS
+    description: str
+    raw_data: dict
+    age_hours: int
+    decay_factor: float
+
+
+class SignalExtractor:
+    """Base class for signal extractors."""
+    signal_type: str
+    
+    def extract(self, data: dict) -> list[SignalResult]:
+        """Extract zero or more signals from the gathered data."""
+        raise NotImplementedError
+
+
+# Registry
+_extractors: list[SignalExtractor] = []
+
+
+def register(extractor_class):
+    _extractors.append(extractor_class())
+    return extractor_class
+
+
+def extract_all(data: dict) -> list[SignalResult]:
+    results = []
+    for extractor in _extractors:
+        try:
+            results.extend(extractor.extract(data))
+        except Exception as e:
+            logger.warning(f"Extractor {extractor.signal_type} failed: {e}")
+    return results
+# research/signal_extractors/insider.py
+
+
+@register
+class CongressionalTradingExtractor(SignalExtractor):
+    signal_type = "congressional_trading"
+    
+    def extract(self, data: dict) -> list[SignalResult]:
+        trades = data.get("congressional_trades", [])
+        if not trades:
+            return []
+        
+        recent = trades[:10]
+        buys = sum(1 for t in recent if t["transaction_type"].lower() in ("purchase", "buy"))
+        sells = sum(1 for t in recent if t["transaction_type"].lower() in ("sale", "sell"))
+        
+        results = []
+        if buys > sells:
+            contribution = min((buys - sells) * 0.2, 1.0)  # Normalized to [-1, 1]
+            results.append(SignalResult(
+                signal_type=self.signal_type,
+                contribution=contribution,
+                weight=get_signal_weight(self.signal_type),
+                description=f"Congressional accumulation ({buys} buys vs {sells} sells)",
+                raw_data={"buys": buys, "sells": sells},
+                age_hours=_calculate_age_hours(recent[0].get("transaction_date")),
+                decay_factor=1.0,
+            ))
+        # ... (sells case)
+        
+        return results
+Adding a new signal = adding one class with @register decorator. The scorer automatically picks it up. No code changes anywhere else.
+________________
+
+
+HTML Renderer: The CSS Problem
+1,600 lines of generate_html_reliable() is mostly a massive Python string containing CSS and HTML templates. This should be:
+1. Actual CSS files (not Python strings) in a templates/ directory
+2. Jinja2 templates for the HTML structure
+3. The renderer just populates the template with data
+research/
+├── templates/
+│   ├── report.html.j2          # Main report template
+│   ├── hero_section.html.j2    # Hero section partial
+│   ├── verdict_card.html.j2    # Verdict visualization partial
+│   └── styles/
+│       ├── base.css            # Typography, spacing, layout
+│       ├── verdict.css         # Verdict-specific styling
+│       ├── tables.css          # Table formatting
+│       └── responsive.css      # Mobile breakpoints
+The 85-line STYLE_GUIDE Python constant becomes an actual CSS file that designers (or future you) can edit without touching Python code.
+________________
+
+
+Performance Implications
+Current pipeline (synchronous, single security):
+gather_data()          ~3-5s    (20 parallel SQL queries via threads)
+calculate_iald_score() ~0.1s    (CPU-bound)
+generate_report()      ~15-30s  (LLM API call, single shot)
+generate_html()        ~10-20s  (another LLM call for HTML, or programmatic)
+save + notify          ~1-2s    (DB writes + Slack)
+─────────────────────────────
+Total:                 ~30-60s per security
+v2 pipeline (async, optimized):
+gather_data()          ~1-2s    (asyncio.gather, asyncpg native)
+score()                ~0.1s    (CPU-bound, no change)
+generate_report()      ~10-20s  (LLM call, can be local model)
+render_html()          ~0.5s    (Jinja2 template, no LLM)
+save + notify          ~0.5s    (async DB writes + async HTTP)
+─────────────────────────────
+Total:                 ~12-24s per security
+The biggest win: eliminating the second LLM call for HTML conversion. The current generate_html_reliable() doesn't actually use an LLM for conversion (it's programmatic markdown→HTML), but it does call generate_pithy_observation() via GPT-4o-mini. That observation can be generated during the main report LLM call (one prompt, one call) or cached.
+________________
+
+
+Migration Path
+1. Extract asset_configs.py and style_guide.py — pure data, zero risk, immediate readability win
+2. Extract notifications.py — self-contained, no dependencies on other modules
+3. Extract persistence.py — self-contained DB operations
+4. Extract signal_extractors/ — the 42 extraction methods, organized by domain
+5. Extract scorer.py — depends on signal_extractors, replaces both v1 and v2 scoring
+6. Extract data_collector.py — convert to async, declarative data plan
+7. Extract report_generator.py — integrate with LLM Gateway
+8. Extract html_renderer.py — convert CSS strings to files, add Jinja2 templates
+9. Write __init__.py pipeline orchestrator — ties everything together
+10. Delete research.py — the 11,268-line monolith is gone
+Each step can be done independently and tested before proceeding to the next. The old research.py continues to work throughout — each extraction removes code from it until it's empty.
+________________
+
+
+Relationship to the Four Pillars
+This decomposition directly serves Pillar 1 (SignalDelta Score):
+* The scorer becomes a standalone service usable by Score, Conductor, and future Cascade
+* Signal extractors become the pluggable interface where new signals (from the 80-signal catalog) are added
+* The data collector becomes the standardized interface between collectors and the scoring pipeline
+It also prepares for Pillar 4 (Tempo):
+* The _calculate_fundamental_multiplier() logic is a primitive form of contextual baseline adjustment
+* Extracting it into the scorer module creates the integration point where Tempo's context will plug in
+* When Tempo arrives, it replaces the hardcoded fundamental multiplier with dynamic, multi-lens baselines
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

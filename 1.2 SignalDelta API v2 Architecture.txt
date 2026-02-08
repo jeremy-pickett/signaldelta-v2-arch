@@ -1,0 +1,1025 @@
+﻿SignalDelta API v2 — Architecture & Design Specification
+Version 1.0 DRAFT | February 8, 2026
+________________
+
+
+Canonical Reference
+This document defines the API implementation for SignalDelta's platform. It is subordinate to the Product Architecture — Core Systems Specification, which defines the four first-class pillars: SignalDelta Score, Conductor, Cascade, and Tempo. All API design decisions in this document serve those four pillars. See the Product Architecture document for the system interaction model, data flow, and build sequence.
+________________
+
+
+I. Executive Summary
+The v1 API grew organically from an IALD research prototype into a 32-router monolith serving a React frontend. It works, but it has structural problems that will compound under concurrency, multi-LLM integration, and public API traffic:
+* 32 routers with no domain grouping — flat namespace, tangled imports
+* 7 copy-pasted auth dependencies that differ only in which tier they check
+* In-memory rate limiting and caching that breaks under multi-worker deployment
+* Hardcoded LLM provider (OpenAI only) in every route that uses AI
+* Public API as afterthought (public_api_v1.py is a separate router gated to Research tier)
+* No background task architecture — heavy compute (report generation, LLM calls, signal collection) blocks request handlers
+* CORS wide open (allow_origin_regex=r".*") despite a proper allowlist in config
+The v2 redesign keeps what works (asyncpg raw SQL, Pydantic schemas, FastAPI dependency injection, database-driven entitlements) and fixes the structural problems before they become architectural rewrites under load.
+Design Principles
+1. Public API is the API. There is one API. The React frontend is a consumer of that API, not a privileged internal client. Every endpoint is designed API-first; the frontend adapts to the API, not the reverse.
+2. Concurrency-safe by default. No in-memory state that breaks under multiple workers. Rate limiting, caching, and session state use Redis or Postgres, never Python dicts.
+3. LLM-agnostic. Every LLM call routes through a gateway that abstracts provider, model, and deployment (cloud vs. local). Adding a new local model is a config change, not a code change.
+4. Domain-organized. Routes are grouped by business domain, not by UI page. Each domain module owns its schemas, routes, and service logic.
+5. Entitlements are data, not code. The v1 tier_entitlements table is the right pattern. v2 extends it: every endpoint declares what entitlement it requires, and a single middleware enforces it.
+6. Horizontally scalable. The API server is stateless. All state lives in Postgres (durable) or Redis (ephemeral). Adding workers or pods requires zero code changes.
+________________
+
+
+II. Architecture Overview
+┌─────────────────────────────────────────────────────────┐
+│                     Clients                             │
+│   React SPA (Firebase auth)  │  API consumers (API key) │
+└──────────────┬───────────────┴──────────┬───────────────┘
+               │                          │
+               ▼                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                    API Gateway Layer                     │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐    │
+│  │ CORS     │  │ Rate     │  │ Auth Resolver      │    │
+│  │ Middleware│  │ Limiter  │  │ (Firebase OR       │    │
+│  │          │  │ (Redis)  │  │  API Key → User)   │    │
+│  └──────────┘  └──────────┘  └────────────────────┘    │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│                   Domain Modules                        │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
+│  │ Signals  │ │ Market   │ │ User     │ │ Platform │  │
+│  │ & IALD   │ │ Data     │ │ Domain   │ │          │  │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘  │
+│       │            │            │             │         │
+│       ▼            ▼            ▼             ▼         │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │              Service Layer                       │   │
+│  │  ┌───────────┐ ┌───────────┐ ┌───────────────┐  │   │
+│  │  │ LLM       │ │ Entitle-  │ │ Background    │  │   │
+│  │  │ Gateway   │ │ ments     │ │ Task Queue    │  │   │
+│  │  └─────┬─────┘ └───────────┘ └───────┬───────┘  │   │
+│  │        │                             │           │   │
+│  │        ▼                             ▼           │   │
+│  │  ┌───────────┐               ┌───────────────┐  │   │
+│  │  │ Local LLMs│               │ Task Workers  │  │   │
+│  │  │ (Ollama/  │               │ (ARQ/Celery)  │  │   │
+│  │  │  vLLM)    │               │               │  │   │
+│  │  │ Cloud LLMs│               │               │  │   │
+│  │  │ (OpenAI/  │               │               │  │   │
+│  │  │  Anthropic)│              │               │  │   │
+│  │  └───────────┘               └───────────────┘  │   │
+│  └─────────────────────────────────────────────────┘   │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ▼
+        ┌──────────────┴──────────────┐
+        │         Data Layer          │
+        │  ┌──────────┐ ┌──────────┐  │
+        │  │ Postgres │ │ Redis    │  │
+        │  │ (durable)│ │ (cache,  │  │
+        │  │          │ │  rate    │  │
+        │  │          │ │  limits, │  │
+        │  │          │ │  queues) │  │
+        │  └──────────┘ └──────────┘  │
+        └─────────────────────────────┘
+Tech Stack (unchanged where it works)
+Component
+	v1
+	v2
+	Rationale
+	Framework
+	FastAPI
+	FastAPI
+	Nothing better for async Python APIs
+	Server
+	uvicorn
+	uvicorn + gunicorn
+	gunicorn manages worker processes
+	Database
+	asyncpg pool
+	asyncpg pool
+	Raw SQL stays, no ORM
+	Auth (consumer)
+	Firebase
+	Firebase
+	Works, users exist
+	Auth (API)
+	API key (Research only)
+	API key (all paid tiers)
+	First-class citizen
+	Cache/Rate limit
+	Python dicts
+	Redis
+	Concurrency-safe
+	LLM
+	OpenAI hardcoded
+	LLM Gateway
+	Provider-agnostic
+	Background tasks
+	None (inline)
+	ARQ (Redis-backed)
+	Non-blocking heavy compute
+	Task queue
+	None
+	ARQ
+	Lightweight, async-native, Redis-backed
+	PDF generation
+	PDFShift (external)
+	PDFShift or WeasyPrint
+	Keep external, add local fallback
+	Frontend
+	React + Vite
+	React + Vite
+	Unchanged
+	Why ARQ over Celery: ARQ is async-native (built on asyncio + Redis), lightweight, and doesn't require a separate broker like RabbitMQ. For the current scale (single server, <100 concurrent users), ARQ is sufficient. If you outgrow it, the task interface is simple enough to swap for Celery or Dramatiq without rewriting task definitions.
+________________
+
+
+III. Route Taxonomy — What Survives, What's Cut, What's Merged
+The Decision Framework
+Every v1 router is evaluated on three criteria:
+1. Does it serve the IALD mission? (signal detection, scoring, research, market data)
+2. Does it serve paying users? (watchlists, alerts, reports, API access)
+3. Does it have active users or data?
+If it fails all three, it's cut. If it partially qualifies, it's merged into a parent domain.
+Router-by-Router Assessment
+v1 Router
+	Verdict
+	v2 Location
+	Rationale
+	securities
+	Keep
+	signals/securities.py
+	Core: security master data
+	research
+	Keep
+	signals/research.py
+	Core: IALD research reports
+	radar
+	Keep
+	signals/radar.py
+	Core: real-time signal monitoring
+	cohort_analytics
+	Keep
+	signals/cohorts.py
+	Core: cohort-level IALD analysis
+	explain
+	Keep
+	signals/explain.py
+	Valuable UX feature, needs LLM gateway
+	conductor
+	Keep
+	signals/conductor.py
+	Core: automated signal orchestration
+	backtest
+	Keep
+	signals/backtest.py
+	Core: signal validation
+	deepdelta
+	Keep
+	signals/deepdelta.py
+	Core: deep research analysis
+	price_history
+	Keep
+	market/prices.py
+	Core: OHLCV data for charting
+	currencies
+	Keep
+	market/currencies.py
+	Exchange rates for multi-currency
+	auth
+	Keep
+	users/auth.py
+	Required
+	users
+	Keep
+	users/profiles.py
+	Required
+	watchlist
+	Keep
+	users/watchlist.py
+	Core user feature
+	alerts
+	Keep
+	users/alerts.py
+	Core user feature
+	tracking
+	Keep
+	users/tracking.py
+	Usage analytics
+	subscriptions
+	Keep
+	platform/subscriptions.py
+	Stripe billing
+	api_keys
+	Keep
+	platform/api_keys.py
+	First-class API access
+	admin
+	Keep
+	platform/admin.py
+	System commands
+	status
+	Keep
+	platform/status.py
+	System health
+	reports
+	Merge
+	signals/research.py
+	Merge with research — same domain
+	report_chat
+	Merge
+	signals/research.py
+	Conversational report access is a research feature
+	cohorts
+	Merge
+	signals/cohorts.py
+	System cohorts merge with cohort_analytics
+	custom_cohorts
+	Merge
+	signals/cohorts.py
+	Custom cohorts merge with cohort_analytics
+	lab
+	Merge
+	platform/admin.py
+	Lab is internal experimental features
+	ticker_requests
+	Merge
+	users/watchlist.py
+	Ticker request is a watchlist-adjacent feature
+	public_api_v1
+	Eliminate
+	N/A
+	v2 API IS the public API — no separate router
+	arena
+	Cut
+	—
+	Doesn't advance IALD mission
+	comments
+	Cut
+	—
+	Social feature, no active use driving IALD
+	invites
+	Cut
+	—
+	Growth hack, not core
+	invite_requests
+	Cut
+	—
+	Growth hack, not core
+	contact
+	Cut
+	—
+	Static form, handle via email/Slack
+	slack
+	Merge
+	platform/notifications.py
+	Slack is one notification channel
+	Result: 32 routers → 18 route files across 4 domain modules.
+Assumption Check
+I'm assuming Arena doesn't drive revenue or retention. If it does — if users actually use the prediction market feature and it differentiates the product — push back and I'll reclassify it. Same for comments: if there's community engagement happening there, it might belong. But from the commit history (Arena improvements: odds calculation, virtual dollars, bet timeframes), it looks like a feature that was fun to build but isn't pulling its weight.
+________________
+
+
+IV. Domain Module Structure
+api/
+├── main.py                    # App factory, lifespan, middleware
+├── config.py                  # Settings (unchanged)
+├── database.py                # asyncpg pool (unchanged)
+├── dependencies.py            # Auth + entitlements (unified)
+├── middleware/
+│   ├── rate_limiter.py        # Redis-backed rate limiting
+│   └── request_logger.py     # Structured request logging
+├── services/
+│   ├── llm_gateway.py         # LLM provider abstraction
+│   ├── entitlements.py        # Tier entitlements (mostly unchanged)
+│   ├── notifications.py       # Email + Slack unified
+│   ├── pdf_service.py         # PDF generation
+│   └── task_queue.py          # ARQ task definitions
+├── auth/
+│   ├── firebase.py            # Firebase token verification
+│   └── api_key.py             # API key verification
+├── signals/                   # Domain: IALD core
+│   ├── __init__.py
+│   ├── schemas.py             # All signal-domain Pydantic models
+│   ├── securities.py          # Security master data
+│   ├── research.py            # IALD reports, report chat
+│   ├── radar.py               # Real-time signal radar
+│   ├── cohorts.py             # System + custom cohorts, analytics
+│   ├── explain.py             # LLM-powered explanations
+│   ├── conductor.py           # Signal orchestration
+│   ├── backtest.py            # Signal backtesting
+│   └── deepdelta.py           # Deep research analysis
+├── market/                    # Domain: Market data
+│   ├── __init__.py
+│   ├── schemas.py
+│   ├── prices.py              # OHLCV price history
+│   └── currencies.py          # Exchange rates
+├── users/                     # Domain: User management
+│   ├── __init__.py
+│   ├── schemas.py
+│   ├── auth.py                # Login, registration, session
+│   ├── profiles.py            # User profile CRUD
+│   ├── watchlist.py           # Watchlist + ticker requests
+│   ├── alerts.py              # Alert configuration + delivery
+│   └── tracking.py            # Usage analytics
+└── platform/                  # Domain: Platform operations
+    ├── __init__.py
+    ├── schemas.py
+    ├── subscriptions.py       # Stripe billing
+    ├── api_keys.py            # API key management
+    ├── admin.py               # System commands + lab
+    ├── status.py              # System health
+    └── notifications.py       # Slack + email channels
+Router Registration in main.py (v2)
+# v2: 4 domain modules, each with an include_routers() function
+from .signals import include_routers as include_signal_routers
+from .market import include_routers as include_market_routers
+from .users import include_routers as include_user_routers
+from .platform import include_routers as include_platform_routers
+
+
+include_signal_routers(app, prefix="/api/v2")
+include_market_routers(app, prefix="/api/v2")
+include_user_routers(app, prefix="/api/v2")
+include_platform_routers(app, prefix="/api/v2")
+Each domain's __init__.py handles its own router aggregation:
+# signals/__init__.py
+from fastapi import FastAPI
+from .securities import router as securities_router
+from .research import router as research_router
+# ... etc
+
+
+def include_routers(app: FastAPI, prefix: str = ""):
+    app.include_router(securities_router, prefix=prefix)
+    app.include_router(research_router, prefix=prefix)
+    # ...
+________________
+
+
+V. Auth & Entitlements v2
+The Problem
+v1's dependencies.py has 7 functions that are 90% identical. Each one:
+1. Extracts Bearer token from header
+2. Verifies via Firebase
+3. Queries users table
+4. Checks tier against a hardcoded list
+5. Returns user dict
+The only variable is step 4 (which tiers are allowed). This is a textbook parameterized dependency.
+v2 Auth: Unified Resolver
+# api/dependencies.py
+
+
+from enum import Enum
+from typing import Optional
+from fastapi import Depends, HTTPException, Header, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+
+security = HTTPBearer(auto_error=False)
+
+
+
+
+class AuthMethod(Enum):
+    FIREBASE = "firebase"
+    API_KEY = "api_key"
+
+
+
+
+async def resolve_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    x_api_key: Optional[str] = Header(None),
+) -> dict:
+    """
+    Unified auth resolver. Accepts either:
+    - Bearer token (Firebase ID token from React SPA)
+    - X-API-Key header (programmatic API access)
+    
+    Returns a standardized user dict with auth_method indicator.
+    """
+    pool = await get_pool()
+    
+    if x_api_key:
+        # API key path
+        async with pool.acquire() as conn:
+            key_row = await conn.fetchrow(
+                """
+                SELECT ak.user_id, ak.key_name, ak.rate_limit_per_hour,
+                       u.email, u.display_name, u.role, u.subscription_tier, u.active
+                FROM api_keys ak
+                JOIN users u ON ak.user_id = u.user_id
+                WHERE ak.key_hash = digest($1, 'sha256')
+                  AND ak.active = TRUE AND u.active = TRUE
+                """,
+                x_api_key
+            )
+        if not key_row:
+            raise HTTPException(401, "Invalid API key")
+        
+        user = dict(key_row)
+        user["auth_method"] = AuthMethod.API_KEY
+        user["api_key_name"] = key_row["key_name"]
+        user["rate_limit"] = key_row["rate_limit_per_hour"]
+        return user
+    
+    if credentials:
+        # Firebase path
+        decoded = verify_firebase_token(credentials.credentials)
+        if not decoded:
+            raise HTTPException(401, "Invalid or expired token")
+        
+        async with pool.acquire() as conn:
+            user_row = await conn.fetchrow(
+                """
+                SELECT user_id, firebase_uid, email, display_name,
+                       avatar_url, role, subscription_tier, active
+                FROM users
+                WHERE firebase_uid = $1 AND active = TRUE
+                """,
+                decoded["uid"]
+            )
+        if not user_row:
+            raise HTTPException(401, "User not found or inactive")
+        
+        user = dict(user_row)
+        user["auth_method"] = AuthMethod.FIREBASE
+        return user
+    
+    raise HTTPException(401, "Authentication required")
+
+
+
+
+def require_tier(*allowed_tiers: str):
+    """
+    Dependency factory for tier-gated endpoints.
+    
+    Usage:
+        @router.get("/reports", dependencies=[Depends(require_tier("professional", "analyst", "research"))])
+        async def get_reports(user: dict = Depends(resolve_user)):
+            ...
+    """
+    async def check(user: dict = Depends(resolve_user)):
+        tier = user.get("subscription_tier") or "free"
+        if tier not in allowed_tiers and user.get("role") not in ("admin", "internal"):
+            raise HTTPException(
+                403,
+                f"This feature requires {' or '.join(allowed_tiers)} tier"
+            )
+        return user
+    return check
+
+
+
+
+def require_feature(feature_name: str):
+    """
+    Dependency factory for feature-gated endpoints.
+    Uses the entitlements service (database-driven).
+    
+    Usage:
+        @router.get("/custom-cohorts", dependencies=[Depends(require_feature("custom_cohorts"))])
+    """
+    async def check(user: dict = Depends(resolve_user)):
+        tier = user.get("subscription_tier") or "free"
+        if not check_feature_access(tier, feature_name):
+            raise HTTPException(403, f"Feature '{feature_name}' not available on your plan")
+        return user
+    return check
+
+
+
+
+def require_admin():
+    """Dependency that requires admin role."""
+    async def check(user: dict = Depends(resolve_user)):
+        if user.get("role") not in ("admin", "internal"):
+            raise HTTPException(403, "Admin access required")
+        return user
+    return check
+Result: 7 dependency functions → 1 resolver + 3 tiny factories. Every endpoint uses resolve_user for auth and optionally adds require_tier(), require_feature(), or require_admin() as needed.
+API Key as First-Class Auth
+In v1, API keys exist but are gated to Research tier and routed through a separate public_api_v1.py router that re-exposes a subset of endpoints. This creates a maintenance burden (two implementations of the same data access) and limits what API consumers can do.
+In v2, API keys are accepted by every endpoint via the unified resolve_user dependency. Tier-gating still applies — a Free-tier API key gets Free-tier access. But the auth mechanism (Firebase vs. API key) is orthogonal to the authorization decision (what tier are you?).
+API key availability by tier:
+Tier
+	API Keys
+	Rate Limit
+	Notes
+	Free
+	0
+	—
+	Must use Firebase (web UI only)
+	Entry
+	1
+	100/hr
+	Basic programmatic access
+	Professional
+	3
+	500/hr
+	Multiple integrations
+	Analyst
+	5
+	2,000/hr
+	Heavy programmatic use
+	Research
+	10
+	10,000/hr
+	Full platform access
+	________________
+
+
+VI. LLM Gateway
+The Problem
+v1 hardcodes OpenAI in every file that uses an LLM:
+* explain.py: openai.OpenAI(api_key=...), model gpt-4o-mini
+* cohort_llm.py: OpenAI for cohort matching
+* report_chat.py: OpenAI for conversational report analysis
+* deepdelta.py: OpenAI for deep research
+You're bringing up 4 local LLMs. Every one of these call sites needs to become provider-agnostic.
+v2 LLM Gateway
+# api/services/llm_gateway.py
+
+
+from enum import Enum
+from typing import Optional, AsyncIterator
+from pydantic import BaseModel
+import httpx
+import openai
+
+
+
+
+class LLMProvider(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    OLLAMA = "ollama"        # Local, Ollama-managed models
+    VLLM = "vllm"            # Local, vLLM-served models
+    OPENAI_COMPAT = "openai_compat"  # Any OpenAI-compatible API (LocalAI, LM Studio, etc.)
+
+
+
+
+class LLMConfig(BaseModel):
+    """Per-model configuration. Stored in DB or loaded from config."""
+    provider: LLMProvider
+    model_name: str              # e.g., "gpt-4o-mini", "qwen2.5:72b", "deepseek-r1:32b"
+    base_url: Optional[str]      # For local models: "http://localhost:11434/v1"
+    api_key: Optional[str]       # For cloud providers; None for local
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    timeout_seconds: int = 120
+
+
+
+
+class LLMRequest(BaseModel):
+    """Standardized request to any LLM."""
+    system_prompt: str
+    user_prompt: str
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+    response_format: Optional[str] = None  # "json" or None
+
+
+
+
+class LLMResponse(BaseModel):
+    """Standardized response from any LLM."""
+    content: str
+    model: str
+    provider: str
+    usage: dict  # {"prompt_tokens": N, "completion_tokens": N}
+    latency_ms: int
+
+
+
+
+# Model routing table — which model handles which use case
+# Loaded from DB table `llm_model_routing` on startup, cached in memory
+_routing_table: dict[str, LLMConfig] = {}
+
+
+
+
+async def load_routing_table():
+    """Load model routing from database."""
+    global _routing_table
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT use_case, provider, model_name, base_url, api_key,
+                   max_tokens, temperature, timeout_seconds
+            FROM llm_model_routing
+            WHERE active = TRUE
+        """)
+    _routing_table = {
+        row["use_case"]: LLMConfig(**dict(row))
+        for row in rows
+    }
+
+
+
+
+async def complete(use_case: str, request: LLMRequest) -> LLMResponse:
+    """
+    Route an LLM request to the appropriate provider/model.
+    
+    Use cases:
+        - "explain"          → Jargon explanation (fast, cheap)
+        - "cohort_match"     → Securities matching (structured output)
+        - "report_chat"      → Conversational analysis (context-heavy)
+        - "deep_research"    → Deep analysis (high quality)
+        - "signal_classify"  → Signal classification (structured output)
+        - "report_generate"  → Full report generation (long output)
+    """
+    config = _routing_table.get(use_case)
+    if not config:
+        raise ValueError(f"No LLM routing configured for use case: {use_case}")
+    
+    # All providers normalize to OpenAI-compatible API
+    # (Ollama, vLLM, and most local servers expose OpenAI-compat endpoints)
+    if config.provider in (LLMProvider.OPENAI, LLMProvider.OLLAMA,
+                           LLMProvider.VLLM, LLMProvider.OPENAI_COMPAT):
+        return await _call_openai_compat(config, request)
+    elif config.provider == LLMProvider.ANTHROPIC:
+        return await _call_anthropic(config, request)
+    else:
+        raise ValueError(f"Unsupported provider: {config.provider}")
+Database Table: llm_model_routing
+CREATE TABLE llm_model_routing (
+    id SERIAL PRIMARY KEY,
+    use_case VARCHAR(50) UNIQUE NOT NULL,
+    provider VARCHAR(20) NOT NULL,        -- openai, anthropic, ollama, vllm, openai_compat
+    model_name VARCHAR(100) NOT NULL,     -- gpt-4o-mini, qwen2.5:72b, etc.
+    base_url VARCHAR(200),                -- NULL for cloud, URL for local
+    api_key VARCHAR(200),                 -- NULL for local models
+    max_tokens INT DEFAULT 4096,
+    temperature FLOAT DEFAULT 0.7,
+    timeout_seconds INT DEFAULT 120,
+    active BOOLEAN DEFAULT TRUE,
+    notes TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+
+-- Example routing configuration
+INSERT INTO llm_model_routing (use_case, provider, model_name, base_url, notes) VALUES
+('explain',         'ollama',    'qwen2.5:7b',     'http://localhost:11434/v1', 'Fast, cheap, good enough for jargon'),
+('cohort_match',    'ollama',    'qwen2.5:72b',    'http://localhost:11434/v1', 'Needs structured output quality'),
+('report_chat',     'openai',    'gpt-4o-mini',     NULL,                       'Conversational, cloud for reliability'),
+('deep_research',   'anthropic', 'claude-sonnet-4-5-20250929', NULL,             'Highest quality for deep analysis'),
+('signal_classify', 'vllm',      'deepseek-r1:32b', 'http://localhost:8001/v1', 'Reasoning model for classification'),
+('report_generate', 'ollama',    'llama3.3:70b',   'http://localhost:11434/v1', 'Long output, local for cost');
+Key insight: Ollama, vLLM, LocalAI, and LM Studio all expose OpenAI-compatible endpoints. This means the gateway only needs two code paths: OpenAI-compatible (handles 90% of providers) and Anthropic (different API format). Adding a new local model is an INSERT INTO llm_model_routing — zero code changes.
+Fallback Chain
+Each use case can have a fallback chain for reliability:
+CREATE TABLE llm_fallback_chain (
+    use_case VARCHAR(50) NOT NULL,
+    priority INT NOT NULL,              -- 1 = primary, 2 = first fallback, etc.
+    provider VARCHAR(20) NOT NULL,
+    model_name VARCHAR(100) NOT NULL,
+    base_url VARCHAR(200),
+    PRIMARY KEY (use_case, priority)
+);
+
+
+-- Example: explain → try local first, fall back to cloud
+INSERT INTO llm_fallback_chain VALUES
+('explain', 1, 'ollama',  'qwen2.5:7b',    'http://localhost:11434/v1'),
+('explain', 2, 'openai',  'gpt-4o-mini',   NULL),
+('explain', 3, 'anthropic','claude-haiku-4-5-20251001', NULL);
+The gateway tries priority 1 first. If it fails (timeout, error, model unavailable), it tries priority 2, and so on. This gives you resilience: local models go down → cloud takes over automatically. Cloud has an outage → local models keep serving.
+________________
+
+
+VII. Concurrency & Scaling
+Connection Pool Sizing
+v1 uses a default asyncpg pool. v2 needs explicit sizing:
+# Rule of thumb: pool_size = (2 * cpu_cores) + disk_spindles
+# For a single Postgres server with SSD: pool_size ≈ 2 * cores + 1
+# For N uvicorn workers sharing a pool: pool_size_per_worker = total_pool / N
+
+
+POOL_MIN = 5
+POOL_MAX = 20  # Per worker. 4 workers × 20 = 80 max connections
+
+
+pool = await asyncpg.create_pool(
+    dsn=settings.DATABASE_URL,
+    min_size=POOL_MIN,
+    max_size=POOL_MAX,
+    max_inactive_connection_lifetime=300,
+    command_timeout=60,
+)
+Important: With gunicorn managing multiple uvicorn workers, each worker gets its own pool. 4 workers × 20 max = 80 connections to Postgres. Default max_connections in Postgres is 100. You need to either increase Postgres max_connections or use PgBouncer as a connection pooler in front of Postgres.
+Recommendation: Add PgBouncer in transaction pooling mode between the API and Postgres. It multiplexes many application connections over fewer Postgres connections, handles connection recycling, and adds zero latency for a single-server setup.
+Worker Model
+# Development (single worker, auto-reload)
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+# Production (gunicorn managing uvicorn workers)
+gunicorn api.main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --workers 4 \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --max-requests 1000 \
+    --max-requests-jitter 100
+--max-requests 1000 recycles workers after 1000 requests, preventing memory leaks from long-running processes. --max-requests-jitter 100 prevents all workers from recycling simultaneously.
+Rate Limiting (Redis-backed)
+# api/middleware/rate_limiter.py
+
+
+import redis.asyncio as redis
+from fastapi import Request, HTTPException
+
+
+_redis: redis.Redis = None
+
+
+async def init_redis():
+    global _redis
+    _redis = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+async def check_rate_limit(key: str, limit: int, window_seconds: int = 3600) -> bool:
+    """
+    Sliding window rate limiter using Redis.
+    Returns True if request is allowed, False if rate limited.
+    """
+    pipe = _redis.pipeline()
+    now = time.time()
+    window_start = now - window_seconds
+    
+    # Remove old entries, add current, count
+    pipe.zremrangebyscore(key, 0, window_start)
+    pipe.zadd(key, {str(now): now})
+    pipe.zcard(key)
+    pipe.expire(key, window_seconds + 60)
+    
+    results = await pipe.execute()
+    request_count = results[2]
+    
+    return request_count <= limit
+Rate limit keys:
+* Firebase users: rl:user:{user_id}
+* API key users: rl:apikey:{key_hash[:8]}
+* Unauthenticated (explain endpoint): rl:ip:{client_ip}
+Background Tasks with ARQ
+Heavy operations that currently block request handlers:
+Operation
+	v1 Behavior
+	v2 Behavior
+	Report generation
+	Inline, blocks response
+	Enqueue → return job_id → poll for result
+	Deep research (DeepDelta)
+	Inline, 30-60s response
+	Enqueue → WebSocket progress → result
+	Cohort creation (LLM matching)
+	Inline, 10-20s response
+	Enqueue → poll for result
+	PDF export
+	Inline, external API call
+	Enqueue → email/download when ready
+	Signal collection
+	Cron jobs (separate service)
+	ARQ scheduled tasks (unified)
+	# api/services/task_queue.py
+
+
+from arq import create_pool
+from arq.connections import RedisSettings
+
+
+async def create_task_pool():
+    return await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+
+
+# Task definitions
+async def generate_report(ctx, security_id: int, report_type: str):
+    """Background task: generate IALD research report."""
+    # Heavy compute happens here, not in request handler
+    ...
+
+
+async def run_backtest(ctx, config: dict):
+    """Background task: run signal backtest."""
+    ...
+
+
+# Worker startup
+class WorkerSettings:
+    functions = [generate_report, run_backtest]
+    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)
+________________
+
+
+VIII. Database Patterns
+Kill the N+1 Queries
+v1 custom_cohorts.py issues 3 queries per cohort inside a loop. For 12 cohorts, that's 36 queries for one endpoint.
+v2 approach: single query with aggregation, or at minimum batch queries outside the loop.
+-- v2: Single query with lateral joins and aggregations
+SELECT
+    cc.custom_cohort_id, cc.cohort_name, cc.description,
+    cc.llm_provider, cc.llm_model, cc.member_count, cc.created_at,
+    preview.tickers AS preview_tickers,
+    momentum.return_7d, momentum.breadth
+FROM user_custom_cohorts cc
+LEFT JOIN LATERAL (
+    SELECT array_agg(s.identifier ORDER BY m.match_confidence DESC) AS tickers
+    FROM (
+        SELECT security_id, match_confidence
+        FROM user_custom_cohort_members
+        WHERE custom_cohort_id = cc.custom_cohort_id
+        ORDER BY match_confidence DESC LIMIT 10
+    ) m
+    JOIN securities s ON m.security_id = s.security_id
+) preview ON TRUE
+LEFT JOIN LATERAL (
+    -- momentum calculation as a single subquery per cohort
+    ...
+) momentum ON TRUE
+WHERE cc.user_id = $1
+ORDER BY cc.created_at DESC;
+Materialized Views for Hot Paths
+Several endpoints (radar, cohort analytics, security listings) compute aggregations on every request. These should be materialized views refreshed on a schedule:
+-- Refresh every 5 minutes via ARQ scheduled task
+CREATE MATERIALIZED VIEW mv_security_summary AS
+SELECT
+    s.security_id, s.identifier, s.name, s.security_type,
+    rp.latest_iald_score, rp.latest_verdict,
+    rp.latest_report_date,
+    ph.close AS current_price,
+    ph.timestamp AS price_timestamp
+FROM securities s
+LEFT JOIN research_progress rp ON s.security_id = rp.security_id
+LEFT JOIN LATERAL (
+    SELECT close, timestamp FROM price_history
+    WHERE security_id = s.security_id AND timeframe = '1d'
+    ORDER BY timestamp DESC LIMIT 1
+) ph ON TRUE
+WHERE s.active = TRUE;
+
+
+CREATE UNIQUE INDEX ON mv_security_summary (security_id);
+Redis Caching Layer
+Hot, read-heavy, slowly-changing data should be cached in Redis with TTLs:
+Data
+	TTL
+	Key Pattern
+	Notes
+	Security list
+	5 min
+	cache:securities:list
+	~2000 rows, rarely changes
+	IALD scores
+	15 min
+	cache:iald:{security_id}
+	Changes on report generation
+	Tier entitlements
+	1 hour
+	cache:tiers
+	Changes on pricing update
+	Price data (daily)
+	1 hour
+	cache:price:{ticker}:1d
+	Updated by collector
+	Cohort membership
+	10 min
+	cache:cohort:{cohort_id}
+	Changes on member add/remove
+	________________
+
+
+IX. API Versioning Strategy
+v2 lives at /api/v2/. v1 endpoints continue to work at their current paths (no prefix) until deprecated.
+# v1 (current, deprecated but functional)
+GET /securities/{ticker}
+GET /research/{ticker}
+POST /explain
+
+
+# v2 (new, canonical)
+GET /api/v2/signals/securities/{ticker}
+GET /api/v2/signals/research/{ticker}
+POST /api/v2/signals/explain
+
+
+# Health (unversioned)
+GET /health
+GET /status
+Migration path:
+1. Deploy v2 endpoints alongside v1
+2. Update React frontend to use v2 endpoints
+3. Notify API key users of v2 availability
+4. Set deprecation headers on v1 responses: Deprecation: true, Sunset: 2026-06-01
+5. Remove v1 routers after sunset date
+________________
+
+
+X. What Gets Cut — and Why It's OK
+Feature
+	Why It's Cut
+	Migration Path
+	Arena (prediction market)
+	Fun but doesn't serve IALD mission. Virtual dollars and bet mechanics are engagement features, not research tools.
+	Data stays in DB. Can be resurrected as a standalone microservice if demand emerges.
+	Comments
+	Social feature with no demonstrated engagement. No IALD value.
+	Data stays in DB. If community features matter later, build them properly with moderation tooling.
+	Invites / Invite Requests
+	Growth hack for launch phase. Organic growth via content and API quality is the path forward.
+	Remove routes. Invite codes in DB become historical data.
+	Contact Form
+	Better served by a static form on the marketing site → email, not an API route.
+	Replace with Typeform or plain mailto link.
+	public_api_v1.py (separate public router)
+	The v2 API IS the public API. Maintaining a separate subset of endpoints doubles maintenance for no benefit.
+	All endpoints accept API key auth natively.
+	What Might Be Controversial
+Cutting Arena is the biggest call. If there are active users who engage with it, this is wrong. But the evidence from the codebase suggests it's a feature that was built, iterated on (odds calculation, virtual dollars, bet timeframes), and then didn't get traction. The commit history shows it receiving engineering investment that could have gone to IALD signal development.
+Merging report_chat into research assumes conversational report access is a subfeature of research, not a standalone product. If users primarily interact with SignalDelta through the chat interface rather than the reports, this merge is backwards — research should be a feature of chat, not the reverse. Worth validating with usage data.
+________________
+
+
+Appendix A: Environment Variables (v2)
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=ubuntu
+DB_USER=ubuntu
+DB_PASSWORD=<secret>
+
+
+# Redis (NEW in v2)
+REDIS_URL=redis://localhost:6379/0
+
+
+# Firebase
+FIREBASE_SERVICE_ACCOUNT=/path/to/firebase-service-account.json
+
+
+# API Server
+API_HOST=0.0.0.0
+API_PORT=8000
+API_WORKERS=4
+
+
+# CORS (v2: actually used)
+CORS_ORIGINS=https://signaldelta.io,https://www.signaldelta.io,http://localhost:5173
+
+
+# Stripe
+STRIPE_SECRET_KEY=<secret>
+STRIPE_PUBLISHABLE_KEY=<key>
+STRIPE_WEBHOOK_SECRET=<secret>
+
+
+# LLM providers (cloud — local models configured in DB)
+OPENAI_API_KEY=<secret>
+ANTHROPIC_API_KEY=<secret>
+
+
+# Notifications
+SLACK_WEBHOOK_URL=<url>
+SLACK_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=<user>
+SMTP_PASSWORD=<secret>
+
+
+# PDF
+PDFSHIFT_API_KEY=<secret>
+________________
+
+
+Appendix B: Migration Checklist
+* Add Redis to infrastructure (single instance, persistent storage)
+* Add PgBouncer between API and Postgres
+* Create llm_model_routing and llm_fallback_chain tables
+* Refactor dependencies.py (unified resolver)
+* Build LLM gateway service
+* Build rate limiter middleware (Redis-backed)
+* Reorganize routers into domain modules
+* Update all LLM call sites to use gateway
+* Set up ARQ worker for background tasks
+* Move report generation to background tasks
+* Update React frontend to use /api/v2/ prefix
+* Add deprecation headers to v1 endpoints
+* Deploy gunicorn with multiple workers
+* Fix CORS to use actual allowlist from config
+* Remove cut features (Arena, comments, invites, contact)
+* Update API documentation (OpenAPI/Swagger)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

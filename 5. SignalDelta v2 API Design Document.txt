@@ -1,0 +1,1454 @@
+﻿SignalDelta v2 API Design Document
+Version 1.0 DRAFT | February 8, 2026
+Classification: CONFIDENTIAL
+________________
+
+
+1. Purpose and Scope
+This document specifies the v2 API architecture for SignalDelta. It is an implementation reference — not a PRD, not a pitch. The PRD defines what the four core services do. This document defines how the API exposes them, how configuration and secrets are managed, how shared resources are accessed, and what conventions all new code must follow.
+The v1 API grew organically to 32 routers, 7 service files, and configuration scattered across environment variables, module-level globals, and direct os.environ calls. v2 retains the parts that work (FastAPI, asyncpg, Firebase auth, Stripe billing, Pydantic schemas) and restructures everything else around three principles:
+1. Central configuration — one source of truth for all secrets, credentials, endpoints, and tuning parameters
+2. Service layer discipline — routers are thin HTTP handlers; business logic lives in services; services consume shared resource clients
+3. Explicit resource lifecycle — LLM clients, external API connections, and database pools are initialized once at startup, injected via FastAPI dependencies, and shut down cleanly
+________________
+
+
+2. Configuration Architecture
+2.1 The Problem in v1
+Configuration in v1 is spread across at least four patterns:
+* config.py Settings class reading os.getenv() with defaults
+* Direct os.environ.get() calls in service modules (cohort_llm.py reads ANTHROPIC_API_KEY and OPENAI_API_KEY directly, bypassing config)
+* Module-level side effects (stripe.api_key = settings.STRIPE_SECRET_KEY executes at import time in subscriptions.py)
+* Hardcoded constants in various modules (model names in cohort_llm.py, key format prefix in api_key_auth.py)
+The result: no single place to see what the system depends on, no way to validate configuration at startup, and no structured way to add new external dependencies.
+2.2 v2 Design: Layered TOML Configuration
+v2 uses TOML as the configuration format. TOML is part of the Python standard library as of 3.11 (tomllib), requires no external dependencies, supports nested tables (dot notation), is widely adopted in the Python ecosystem (pyproject.toml, PEP 518), and is readable by humans and machines.
+Configuration is split into two files with a clear separation of concerns:
+config/
+├── settings.toml      # Structure, defaults, endpoints, tuning — committed to git
+└── secrets.toml       # Credentials, API keys, tokens — .gitignored, never committed
+settings.toml — safe to commit, contains no secrets:
+[app]
+name = "SignalDelta API"
+version = "2.0.0"
+environment = "production"    # "development" | "staging" | "production"
+debug = false
+log_level = "INFO"
+
+
+[app.cors]
+allowed_origins = [
+    "https://signaldelta.io",
+    "https://www.signaldelta.io",
+]
+allowed_origins_dev = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+]
+
+
+[server]
+host = "0.0.0.0"
+port = 8000
+workers = 1                   # uvicorn workers; 1 for dev, scale for prod
+
+
+[database]
+host = "localhost"
+port = 5432
+name = "ubuntu"
+user = "ubuntu"
+min_connections = 2
+max_connections = 10
+statement_cache_size = 100
+
+
+[database.timeouts]
+connect_seconds = 10
+query_seconds = 30
+
+
+# ---------------------------------------------------------------------------
+# External Data Providers
+# ---------------------------------------------------------------------------
+# Each provider gets its own table. Endpoints, rate limits, and behavioral
+# config live here. Secrets (API keys, tokens) live in secrets.toml.
+
+
+[providers.finra]
+enabled = false               # FINRA access is problematic — explicit toggle
+base_url = "https://api.finra.org"
+rate_limit_per_second = 5
+retry_max_attempts = 3
+retry_backoff_seconds = 2.0
+# Feeds: F05 (Dark Pool), F06 (Short Interest), F19 (TRACE/Credit)
+notes = "Blocks 14+ signals across 3 families. Acquisition is #1 equities priority."
+
+
+[providers.polygon]
+enabled = true
+base_url = "https://api.polygon.io"
+rate_limit_per_second = 5
+retry_max_attempts = 3
+
+
+[providers.sec_edgar]
+enabled = true
+base_url = "https://efts.sec.gov"
+user_agent = "SignalDelta Research research@signaldelta.io"
+rate_limit_per_second = 10    # SEC asks for ≤10 req/s
+
+
+[providers.kalshi]
+enabled = true
+base_url = "https://trading-api.kalshi.com/trade-api/v2"
+rate_limit_per_second = 10
+
+
+[providers.polymarket]
+enabled = true
+base_url = "https://clob.polymarket.com"
+rate_limit_per_second = 10
+
+
+[providers.coingecko]
+enabled = true
+base_url = "https://api.coingecko.com/api/v3"
+rate_limit_per_second = 10    # Free tier: 10-30/min
+
+
+[providers.goplus]
+enabled = true
+base_url = "https://api.gopluslabs.io/api/v1"
+rate_limit_per_second = 5
+
+
+[providers.defi_api]
+enabled = true
+base_url = "https://api.de.fi"
+rate_limit_per_second = 5
+
+
+[providers.etherscan]
+enabled = true
+base_url = "https://api.etherscan.io/api"
+rate_limit_per_second = 5     # Free tier: 5/s
+
+
+[providers.arkham]
+enabled = true
+base_url = "https://api.arkhamintelligence.com"
+rate_limit_per_second = 5
+
+
+[providers.newsapi]
+enabled = true
+base_url = "https://newsapi.org/v2"
+rate_limit_per_day = 1000     # Free tier daily limit
+
+
+[providers.fmp]
+enabled = true
+base_url = "https://financialmodelingprep.com/api/v3"
+rate_limit_per_second = 10
+
+
+[providers.lunar_crush]
+enabled = true
+base_url = "https://lunarcrush.com/api4/public"
+rate_limit_per_second = 5
+
+
+[providers.santiment]
+enabled = false
+base_url = "https://api.santiment.net/graphql"
+
+
+# ---------------------------------------------------------------------------
+# LLM Configuration
+# ---------------------------------------------------------------------------
+
+
+[llm]
+default_provider = "anthropic"        # "anthropic" | "openai"
+fallback_provider = "openai"
+request_timeout_seconds = 30
+max_retries = 2
+retry_backoff_seconds = 1.0
+
+
+[llm.models]
+# Task-specific model assignments
+# Format: task_name = "provider:model_id"
+cohort_generation = "openai:gpt-4o-mini"
+report_narrative = "anthropic:claude-3-5-haiku-20241022"
+signal_explanation = "anthropic:claude-3-5-haiku-20241022"
+report_chat = "anthropic:claude-3-5-haiku-20241022"
+deepdelta_analysis = "anthropic:claude-sonnet-4-5-20250929"
+
+
+[llm.cost_controls]
+# Per-task token limits to prevent runaway costs
+cohort_generation_max_tokens = 4096
+report_narrative_max_tokens = 8192
+signal_explanation_max_tokens = 2048
+report_chat_max_tokens = 4096
+deepdelta_analysis_max_tokens = 16384
+
+
+# ---------------------------------------------------------------------------
+# Feature Services
+# ---------------------------------------------------------------------------
+
+
+[services.pdf]
+provider = "pdfshift"
+base_url = "https://api.pdfshift.io/v3/convert/pdf"
+timeout_seconds = 30
+
+
+[services.image]
+provider = "openai_dalle"
+model = "dall-e-3"
+default_size = "1024x1024"
+
+
+[services.email]
+provider = "smtp"
+host = "smtp.gmail.com"
+port = 587
+from_address = "noreply@signaldelta.io"
+enabled = false
+
+
+[services.slack]
+enabled = false
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
+[auth.firebase]
+service_account_path = "/home/ubuntu/projects/signaldelta/config/firebase-service-account.json"
+
+
+[auth.api_keys]
+prefix = "sd_live_"
+hash_algorithm = "sha256"
+default_rate_limit_per_second = 5
+default_rate_limit_per_day = 10000
+
+
+# ---------------------------------------------------------------------------
+# Business Rules
+# ---------------------------------------------------------------------------
+
+
+[scoring]
+center = 50
+min_score = 0
+max_score = 100
+magnitude_weight = 0.4
+lean_weight = 0.35
+agreement_weight = 0.25
+# Tier entitlements are DB-driven (tier_entitlements table) — not duplicated here
+secrets.toml — never committed, .gitignored:
+# SignalDelta Secrets — DO NOT COMMIT
+# Copy secrets.toml.example and fill in values
+
+
+[database]
+password = ""
+
+
+[providers.finra]
+api_key = ""
+client_id = ""
+
+
+[providers.polygon]
+api_key = ""
+
+
+[providers.coingecko]
+api_key = ""                  # Pro tier key if available
+
+
+[providers.etherscan]
+api_key = ""
+
+
+[providers.arkham]
+api_key = ""
+
+
+[providers.newsapi]
+api_key = ""
+
+
+[providers.fmp]
+api_key = ""
+
+
+[providers.goplus]
+api_key = ""
+
+
+[providers.lunar_crush]
+api_key = ""
+
+
+[llm.anthropic]
+api_key = ""
+
+
+[llm.openai]
+api_key = ""
+
+
+[services.stripe]
+secret_key = ""
+publishable_key = ""
+webhook_secret = ""
+
+
+[services.pdf.pdfshift]
+api_key = ""
+
+
+[services.slack]
+webhook_url = ""
+signing_secret = ""
+
+
+[services.email]
+user = ""
+password = ""
+2.3 Config Loading
+A single Config class loads both files, merges them (secrets override settings for shared keys), validates required values at startup, and exposes typed accessors with dot notation.
+# api/config.py — v2
+
+
+import tomllib
+from pathlib import Path
+from typing import Any, Optional
+
+
+class Config:
+    """
+    Central configuration loaded from TOML files.
+
+
+    Usage:
+        config = Config.load()
+        config.get("database.host")                    # "localhost"
+        config.get("providers.polygon.api_key")        # from secrets
+        config.get("llm.models.cohort_generation")     # "openai:gpt-4o-mini"
+        config.provider("polygon")                     # full provider dict
+        config.is_enabled("providers.finra")           # False
+    """
+
+
+    def __init__(self, settings: dict, secrets: dict):
+        self._data = self._deep_merge(settings, secrets)
+
+
+    @classmethod
+    def load(
+        cls,
+        settings_path: str = "config/settings.toml",
+        secrets_path: str = "config/secrets.toml",
+    ) -> "Config":
+        base = Path(__file__).parent.parent  # project root
+
+
+        with open(base / settings_path, "rb") as f:
+            settings = tomllib.load(f)
+
+
+        secrets = {}
+        secrets_file = base / secrets_path
+        if secrets_file.exists():
+            with open(secrets_file, "rb") as f:
+                secrets = tomllib.load(f)
+
+
+        instance = cls(settings, secrets)
+        instance.validate()
+        return instance
+
+
+    def get(self, dotted_key: str, default: Any = None) -> Any:
+        """Access nested config via dot notation: 'database.host'"""
+        keys = dotted_key.split(".")
+        node = self._data
+        for key in keys:
+            if isinstance(node, dict) and key in node:
+                node = node[key]
+            else:
+                return default
+        return node
+
+
+    def require(self, dotted_key: str) -> Any:
+        """Like get() but raises if missing."""
+        val = self.get(dotted_key)
+        if val is None or val == "":
+            raise ConfigError(f"Required config missing: {dotted_key}")
+        return val
+
+
+    def provider(self, name: str) -> dict:
+        """Get full provider config dict."""
+        return self.get(f"providers.{name}", {})
+
+
+    def is_enabled(self, dotted_key: str) -> bool:
+        """Check if a provider or service is enabled."""
+        return bool(self.get(f"{dotted_key}.enabled", False))
+
+
+    def validate(self):
+        """Validate required configuration at startup."""
+        required = [
+            "database.host",
+            "database.name",
+            "database.password",
+            "auth.firebase.service_account_path",
+        ]
+        missing = [k for k in required if not self.get(k)]
+        if missing:
+            raise ConfigError(
+                f"Missing required config keys: {', '.join(missing)}"
+            )
+
+
+    @staticmethod
+    def _deep_merge(base: dict, override: dict) -> dict:
+        """Recursively merge override into base."""
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = Config._deep_merge(result[key], value)
+            else:
+                result[key] = value
+        return result
+
+
+
+
+class ConfigError(Exception):
+    pass
+2.4 Environment Override
+For CI/CD and container deployments, environment variables can override any TOML key using the convention SD__SECTION__KEY:
+SD__DATABASE__PASSWORD=prod_password
+SD__PROVIDERS__POLYGON__API_KEY=pk_xxx
+SD__LLM__ANTHROPIC__API_KEY=sk-ant-xxx
+The Config loader checks env vars after TOML loading. Double-underscore maps to dot notation. This gives you three layers of configuration resolution:
+1. settings.toml (defaults, committed)
+2. secrets.toml (credentials, local)
+3. SD__* env vars (deployment overrides, ephemeral)
+Later values win. This means you can run locally with TOML files, deploy to staging with env vars, and the same code handles both without branching.
+2.5 Migration from v1
+The v1 .env file maps directly to the two TOML files. A migration script generates secrets.toml from the existing .env:
+# scripts/migrate_env_to_toml.py
+# Reads .env, writes secrets.toml
+# One-time migration, run once, verify, delete .env
+________________
+
+
+3. Project Structure
+contra-iald/
+├── config/
+│   ├── settings.toml              # Structure, defaults, endpoints
+│   ├── secrets.toml               # .gitignored — credentials
+│   └── secrets.toml.example       # Template — committed
+│
+├── api/
+│   ├── main.py                    # FastAPI app, lifespan, router mounting
+│   ├── config.py                  # Config class (TOML loader)
+│   ├── database.py                # asyncpg pool init/close
+│   ├── dependencies.py            # All FastAPI Depends() in one place
+│   │
+│   ├── auth/
+│   │   ├── firebase.py            # Firebase token verification
+│   │   └── api_keys.py            # API key auth (public API)
+│   │
+│   ├── clients/                   # External resource clients (initialized once)
+│   │   ├── __init__.py
+│   │   ├── registry.py            # Client registry (startup/shutdown lifecycle)
+│   │   ├── llm.py                 # LLM client (Anthropic + OpenAI, task routing)
+│   │   ├── stripe_client.py       # Stripe SDK wrapper
+│   │   ├── pdf.py                 # PDFShift client
+│   │   └── http.py                # Generic HTTP client for data providers
+│   │
+│   ├── schemas/                   # Pydantic models — request/response only
+│   │   ├── common.py              # Shared types (Pagination, ErrorResponse)
+│   │   ├── securities.py
+│   │   ├── scores.py
+│   │   ├── cascade.py
+│   │   ├── tempo.py
+│   │   ├── conductor.py
+│   │   ├── research.py
+│   │   ├── users.py
+│   │   └── billing.py
+│   │
+│   ├── services/                  # Business logic — the thick layer
+│   │   ├── scoring.py             # IALD Score computation
+│   │   ├── cascade.py             # Cascade state detection
+│   │   ├── tempo.py               # Temporal baseline service
+│   │   ├── conductor.py           # Posture synthesis + alerts
+│   │   ├── research.py            # Report generation
+│   │   ├── cohorts.py             # Cohort management + LLM cohort creation
+│   │   ├── backtest.py            # Backtesting engine
+│   │   ├── billing.py             # Stripe subscription lifecycle
+│   │   ├── entitlements.py        # Tier-based feature gating (keep as-is, it works)
+│   │   └── notifications.py       # Email, Slack, push — unified
+│   │
+│   └── routers/                   # Thin HTTP layer — validate, delegate, respond
+│       ├── v1/                    # Versioned public API (breaking change boundary)
+│       │   ├── scores.py          # GET /v1/scores/{ticker}
+│       │   ├── cascade.py         # GET /v1/cascade/{ticker}
+│       │   ├── securities.py      # GET /v1/securities, GET /v1/securities/{ticker}
+│       │   └── research.py        # GET /v1/research/{ticker}
+│       │
+│       ├── app/                   # Internal API (consumed by React frontend)
+│       │   ├── securities.py
+│       │   ├── watchlist.py
+│       │   ├── alerts.py
+│       │   ├── research.py
+│       │   ├── conductor.py
+│       │   ├── cohorts.py
+│       │   ├── backtest.py
+│       │   ├── radar.py
+│       │   └── deepdelta.py
+│       │
+│       ├── account/               # User and billing routes
+│       │   ├── auth.py
+│       │   ├── users.py
+│       │   ├── subscriptions.py
+│       │   └── api_keys.py
+│       │
+│       └── admin/                 # Admin-only routes
+│           ├── system.py          # System commands, health
+│           └── status.py          # Signal pipeline status
+│
+├── collectors/                    # Signal collection (separate process, shared DB)
+│   └── ...                        # Unchanged — collectors are out of API scope
+│
+└── scripts/
+    ├── migrate_env_to_toml.py
+    └── ...
+3.1 Key Structural Decisions
+Router grouping by audience, not by entity. v1 had 32 flat routers mixing internal frontend routes with public API routes with admin routes. v2 groups by who calls them:
+* routers/v1/ — versioned public API. Breaking changes require a new version prefix. Authenticated via API key (X-API-Key header). These routes are the product for Research-tier subscribers.
+* routers/app/ — internal API consumed by the React frontend. Authenticated via Firebase bearer token. Breaking changes are coordinated with frontend deploys. These routes are not publicly documented.
+* routers/account/ — user lifecycle, billing, authentication. Firebase bearer token.
+* routers/admin/ — admin-only operations. Firebase bearer token + admin role check.
+What happened to Arena, invites, comments, contact, lab? These are v1 features that don't advance the IALD thesis. They are not included in the v2 router structure. If any are needed later, they go in routers/app/ with a clear justification for why they belong.
+Collector processes are out of scope. The /collectors/ directory runs as a separate process (cron or daemon) that writes to the shared Postgres database. The API reads from that database. The collectors don't need to be restructured for the API v2 — they're a separate concern with their own refactoring timeline. The only touchpoint is the shared database schema and the config files (collectors will also read settings.toml and secrets.toml for provider credentials).
+________________
+
+
+4. Shared Resource Clients
+4.1 The Problem in v1
+External resources are initialized ad-hoc:
+* cohort_llm.py creates a new anthropic.Anthropic() and openai.OpenAI() client on every function call
+* subscriptions.py sets stripe.api_key at module import time (side effect)
+* No connection reuse for HTTP clients hitting external APIs
+* No shared retry/timeout configuration
+* Model names hardcoded in individual modules
+4.2 Client Registry
+v2 initializes all external clients once at startup via a registry, injects them through FastAPI dependencies, and shuts them down cleanly.
+# api/clients/registry.py
+
+
+from dataclasses import dataclass, field
+from typing import Optional
+import httpx
+
+
+from ..config import Config
+
+
+@dataclass
+class ClientRegistry:
+    """
+    Holds initialized clients for all external services.
+    Created once in lifespan, injected via app.state.
+    """
+    config: Config
+    llm: Optional["LLMClient"] = None
+    stripe: Optional["StripeClient"] = None
+    pdf: Optional["PDFClient"] = None
+    http_pool: Optional[httpx.AsyncClient] = None
+
+
+    async def startup(self):
+        """Initialize all clients. Called in FastAPI lifespan."""
+        from .llm import LLMClient
+        from .stripe_client import StripeClient
+        from .pdf import PDFClient
+
+
+        # Shared HTTP client for all provider API calls
+        self.http_pool = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=10.0),
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=10),
+        )
+
+
+        self.llm = LLMClient(self.config)
+        self.stripe = StripeClient(self.config)
+        self.pdf = PDFClient(self.config, self.http_pool)
+
+
+    async def shutdown(self):
+        """Clean shutdown. Called in FastAPI lifespan."""
+        if self.http_pool:
+            await self.http_pool.aclose()
+4.3 LLM Client
+The LLM client is the most important shared resource. v1 has model names hardcoded in cohort_llm.py and creates new SDK clients per call. v2 centralizes model routing, client reuse, retry logic, and cost controls.
+# api/clients/llm.py
+
+
+import json
+import logging
+from typing import Optional
+
+
+import anthropic
+import openai
+
+
+from ..config import Config
+
+
+logger = logging.getLogger(__name__)
+
+
+
+
+class LLMClient:
+    """
+    Unified LLM client with task-based model routing.
+
+
+    Model assignments are configured in settings.toml under [llm.models].
+    Each task maps to "provider:model_id".
+
+
+    Usage:
+        result = await clients.llm.complete(
+            task="cohort_generation",
+            system="You are a financial analyst...",
+            user_message="Create a cohort of AI chip companies",
+        )
+    """
+
+
+    def __init__(self, config: Config):
+        self._config = config
+        self._anthropic: Optional[anthropic.Anthropic] = None
+        self._openai: Optional[openai.OpenAI] = None
+        self._model_map: dict = config.get("llm.models", {})
+        self._cost_limits: dict = config.get("llm.cost_controls", {})
+        self._timeout = config.get("llm.request_timeout_seconds", 30)
+        self._max_retries = config.get("llm.max_retries", 2)
+
+
+        # Initialize SDK clients (once, reused across all calls)
+        anthropic_key = config.get("llm.anthropic.api_key")
+        if anthropic_key:
+            self._anthropic = anthropic.Anthropic(
+                api_key=anthropic_key,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
+            )
+
+
+        openai_key = config.get("llm.openai.api_key")
+        if openai_key:
+            self._openai = openai.OpenAI(
+                api_key=openai_key,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
+            )
+
+
+    def _resolve_model(self, task: str) -> tuple[str, str]:
+        """Resolve task name to (provider, model_id)."""
+        assignment = self._model_map.get(task)
+        if not assignment:
+            raise ValueError(f"No model configured for task: {task}")
+
+
+        provider, model_id = assignment.split(":", 1)
+        return provider, model_id
+
+
+    def _get_max_tokens(self, task: str) -> int:
+        """Get token limit for task."""
+        key = f"{task}_max_tokens"
+        return self._cost_limits.get(key, 4096)
+
+
+    async def complete(
+        self,
+        task: str,
+        system: str,
+        user_message: str,
+        json_mode: bool = False,
+        temperature: float = 0.0,
+    ) -> dict:
+        """
+        Send a completion request routed by task name.
+
+
+        Returns:
+            {"text": str, "provider": str, "model": str, "usage": dict}
+        """
+        provider, model_id = self._resolve_model(task)
+        max_tokens = self._get_max_tokens(task)
+        fallback_provider = self._config.get("llm.fallback_provider")
+
+
+        try:
+            return self._call(provider, model_id, system,
+                              user_message, max_tokens, json_mode, temperature)
+        except Exception as e:
+            logger.warning(f"[LLM] {provider} failed for {task}: {e}")
+            if fallback_provider and fallback_provider != provider:
+                logger.info(f"[LLM] Falling back to {fallback_provider}")
+                # Use same model family equivalent — or configure explicit fallbacks
+                return self._call(fallback_provider, model_id, system,
+                                  user_message, max_tokens, json_mode, temperature)
+            raise
+
+
+    def _call(self, provider, model_id, system, user_message,
+              max_tokens, json_mode, temperature) -> dict:
+        """Dispatch to provider SDK."""
+        if provider == "anthropic":
+            return self._call_anthropic(model_id, system, user_message,
+                                        max_tokens, temperature)
+        elif provider == "openai":
+            return self._call_openai(model_id, system, user_message,
+                                     max_tokens, json_mode, temperature)
+        else:
+            raise ValueError(f"Unknown LLM provider: {provider}")
+
+
+    def _call_anthropic(self, model, system, user_message,
+                        max_tokens, temperature) -> dict:
+        if not self._anthropic:
+            raise RuntimeError("Anthropic client not initialized (missing API key)")
+
+
+        response = self._anthropic.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return {
+            "text": response.content[0].text,
+            "provider": "anthropic",
+            "model": model,
+            "usage": {
+                "input_tokens": response.usage.input_tokens,
+                "output_tokens": response.usage.output_tokens,
+            },
+        }
+
+
+    def _call_openai(self, model, system, user_message,
+                     max_tokens, json_mode, temperature) -> dict:
+        if not self._openai:
+            raise RuntimeError("OpenAI client not initialized (missing API key)")
+
+
+        kwargs = {
+            "model": model,
+            "max_completion_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_message},
+            ],
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+
+        response = self._openai.chat.completions.create(**kwargs)
+        return {
+            "text": response.choices[0].message.content,
+            "provider": "openai",
+            "model": model,
+            "usage": {
+                "input_tokens": response.usage.prompt_tokens,
+                "output_tokens": response.usage.completion_tokens,
+            },
+        }
+4.4 Provider HTTP Client
+For external data providers (FINRA, Polygon, SEC EDGAR, etc.), a shared HTTP client with per-provider rate limiting and config:
+# api/clients/http.py
+
+
+import asyncio
+import logging
+import time
+from typing import Any, Optional
+
+
+import httpx
+
+
+from ..config import Config
+
+
+logger = logging.getLogger(__name__)
+
+
+
+
+class ProviderClient:
+    """
+    HTTP client for a specific data provider with rate limiting.
+
+
+    Usage:
+        polygon = ProviderClient("polygon", config, http_pool)
+        data = await polygon.get("/v2/aggs/ticker/AAPL/range/1/day/2024-01-01/2024-01-31")
+    """
+
+
+    def __init__(self, provider_name: str, config: Config, http_pool: httpx.AsyncClient):
+        self.name = provider_name
+        self._config = config.provider(provider_name)
+        self._base_url = self._config.get("base_url", "")
+        self._api_key = self._config.get("api_key", "")
+        self._rate_limit = self._config.get("rate_limit_per_second", 5)
+        self._max_retries = self._config.get("retry_max_attempts", 3)
+        self._backoff = self._config.get("retry_backoff_seconds", 1.0)
+        self._http = http_pool
+        self._last_call = 0.0
+
+
+    async def _rate_limit_wait(self):
+        """Simple token bucket — enforce minimum interval between calls."""
+        min_interval = 1.0 / self._rate_limit
+        elapsed = time.monotonic() - self._last_call
+        if elapsed < min_interval:
+            await asyncio.sleep(min_interval - elapsed)
+        self._last_call = time.monotonic()
+
+
+    async def get(self, path: str, params: Optional[dict] = None, **kwargs) -> Any:
+        """GET request with rate limiting and retry."""
+        url = f"{self._base_url}{path}"
+        if params is None:
+            params = {}
+        if self._api_key:
+            params["apikey"] = self._api_key  # convention varies; override in subclass
+
+
+        for attempt in range(self._max_retries):
+            await self._rate_limit_wait()
+            try:
+                response = await self._http.get(url, params=params, **kwargs)
+                response.raise_for_status()
+                return response.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    wait = self._backoff * (2 ** attempt)
+                    logger.warning(f"[{self.name}] Rate limited, waiting {wait}s")
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+            except httpx.RequestError as e:
+                if attempt < self._max_retries - 1:
+                    logger.warning(f"[{self.name}] Request error: {e}, retrying...")
+                    await asyncio.sleep(self._backoff)
+                    continue
+                raise
+________________
+
+
+5. Authentication and Authorization
+5.1 The Problem in v1
+dependencies.py has 7 functions (~280 lines) that copy-paste the same Firebase → DB → tier-check pattern. The only difference is the tier list checked at the end.
+5.2 v2 Design: Parameterized Auth
+One base function. Feature requirements expressed as parameters.
+# api/dependencies.py
+
+
+from typing import Optional
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+
+from .auth.firebase import verify_firebase_token
+from .database import get_pool
+from .services.entitlements import get_tier_entitlements, check_feature_access
+from .clients.registry import ClientRegistry
+
+
+security = HTTPBearer(auto_error=False)
+
+
+
+
+async def get_clients(request: Request) -> ClientRegistry:
+    """Inject the client registry from app state."""
+    return request.app.state.clients
+
+
+
+
+async def get_config(request: Request):
+    """Inject config from app state."""
+    return request.app.state.config
+
+
+
+
+# -----------------------------------------------------------------------
+# Core auth — ONE function, not seven
+# -----------------------------------------------------------------------
+
+
+async def _authenticate(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    require_auth: bool = True,
+    require_feature: Optional[str] = None,
+    require_role: Optional[str] = None,
+) -> Optional[dict]:
+    """
+    Core authentication logic. All auth dependencies delegate here.
+
+
+    Parameters:
+        require_auth: If True, 401 on missing/invalid token. If False, return None.
+        require_feature: If set, check entitlements for this feature name (e.g., "pdf_export").
+        require_role: If set, check user.role matches (e.g., "admin").
+    """
+    if credentials is None:
+        if require_auth:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        return None
+
+
+    decoded = verify_firebase_token(credentials.credentials)
+    if decoded is None:
+        if require_auth:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        return None
+
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        user = await conn.fetchrow(
+            """
+            SELECT user_id, firebase_uid, email, display_name, avatar_url,
+                   role, active, subscription_tier
+            FROM users
+            WHERE firebase_uid = $1 AND active = true
+            """,
+            decoded["uid"],
+        )
+
+
+    if user is None:
+        if require_auth:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+        return None
+
+
+    user_dict = dict(user)
+    tier = user_dict.get("subscription_tier") or "free"
+
+
+    if require_role and user_dict.get("role") not in (
+        [require_role] if isinstance(require_role, str) else require_role
+    ):
+        raise HTTPException(status_code=403, detail=f"{require_role} access required")
+
+
+    if require_feature and not check_feature_access(tier, require_feature):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Feature '{require_feature}' requires a higher subscription tier. Upgrade at /pricing",
+        )
+
+
+    user_dict["tier_entitlements"] = get_tier_entitlements(tier)
+    return user_dict
+
+
+
+
+# -----------------------------------------------------------------------
+# Dependency factories — clean, composable, no duplication
+# -----------------------------------------------------------------------
+
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> dict:
+    """Require authenticated user."""
+    return await _authenticate(credentials)
+
+
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[dict]:
+    """Return user if authenticated, None otherwise."""
+    return await _authenticate(credentials, require_auth=False)
+
+
+
+
+def require_feature(feature: str):
+    """
+    Factory: create a dependency that requires a specific feature entitlement.
+
+
+    Usage in router:
+        @router.get("/reports/{ticker}/pdf")
+        async def export_pdf(user: dict = Depends(require_feature("pdf_export"))):
+            ...
+    """
+    async def dependency(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ) -> dict:
+        return await _authenticate(credentials, require_feature=feature)
+    return dependency
+
+
+
+
+def require_role(role: str):
+    """Factory: create a dependency that requires a specific role."""
+    async def dependency(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    ) -> dict:
+        return await _authenticate(credentials, require_role=role)
+    return dependency
+
+
+
+
+# Convenience aliases (used frequently enough to justify)
+get_admin_user = require_role("admin")
+get_pdf_user = require_feature("pdf_export")
+get_api_user = require_feature("api_access")
+v1's 280 lines becomes ~80 lines. Adding a new tier-gated feature is one line: get_conductor_user = require_feature("conductor").
+________________
+
+
+6. Router Conventions
+6.1 Router Contract
+Every router file follows this pattern:
+# api/routers/app/securities.py
+
+
+from fastapi import APIRouter, Depends
+from ...dependencies import get_current_user, get_clients
+from ...schemas.securities import SecurityDetail, SecurityList
+from ...services import scoring
+
+
+router = APIRouter(prefix="/securities", tags=["securities"])
+
+
+
+
+@router.get("/{ticker}", response_model=SecurityDetail)
+async def get_security(
+    ticker: str,
+    user: dict = Depends(get_current_user),
+    clients = Depends(get_clients),
+):
+    """Get security detail with current IALD score."""
+    return await scoring.get_security_detail(ticker, user)
+Rules:
+1. Routers do not import get_pool(). Database access goes through services.
+2. Routers do not contain SQL. If you're writing SQL in a router, it belongs in a service.
+3. Routers do not create external clients. They receive them via Depends(get_clients).
+4. Routers validate input (Pydantic request models) and format output (Pydantic response models). Everything between is delegated.
+5. Routers do not catch generic exceptions. FastAPI's exception handlers deal with unhandled errors. Routers catch only expected error conditions (e.g., 404 for missing security).
+6.2 Route Map
+The complete v2 route surface, organized by audience:
+Public API (v1/) — API key auth, rate limited, versioned:
+Method
+	Path
+	Description
+	Tier
+	GET
+	/v1/securities
+	List tracked securities
+	Research
+	GET
+	/v1/securities/{ticker}
+	Security detail + IALD score
+	Research
+	GET
+	/v1/scores/{ticker}
+	IALD score with component decomposition
+	Research
+	GET
+	/v1/scores/{ticker}/history
+	Historical score series
+	Research
+	GET
+	/v1/cascade/{ticker}
+	Cascade state map
+	Research
+	GET
+	/v1/research/{ticker}
+	Latest research report
+	Research
+	GET
+	/v1/signals/{ticker}
+	Active signals for security
+	Research
+	GET
+	/v1/cohorts
+	List cohorts
+	Research
+	GET
+	/v1/cohorts/{id}/members
+	Cohort membership
+	Research
+	App API (app/) — Firebase auth, internal:
+Method
+	Path
+	Service
+	GET
+	/app/securities
+	Security list with scores
+	GET
+	/app/securities/{ticker}
+	Full security view
+	GET
+	/app/watchlist
+	User's watchlist
+	POST
+	/app/watchlist
+	Add to watchlist
+	DELETE
+	/app/watchlist/{ticker}
+	Remove from watchlist
+	GET
+	/app/alerts
+	User's alert configurations
+	POST
+	/app/alerts
+	Create alert rule
+	GET
+	/app/research/{ticker}
+	Research report
+	POST
+	/app/research/{ticker}/pdf
+	Export PDF (Professional+)
+	GET
+	/app/conductor/postures
+	Active Conductor postures
+	GET
+	/app/conductor/positions
+	Tracked positions
+	POST
+	/app/conductor/rules
+	Create Conductor rule
+	GET
+	/app/cohorts
+	User's cohorts
+	POST
+	/app/cohorts/custom
+	Create custom cohort (LLM)
+	GET
+	/app/backtest/{ticker}
+	Run backtest
+	GET
+	/app/radar
+	Signal radar dashboard data
+	GET
+	/app/deepdelta/{ticker}
+	Deep analysis (Analyst+)
+	Account (account/) — Firebase auth:
+Method
+	Path
+	Description
+	POST
+	/account/auth/register
+	Create account
+	POST
+	/account/auth/login
+	Login (Firebase token exchange)
+	GET
+	/account/users/me
+	Current user profile
+	PATCH
+	/account/users/me
+	Update profile
+	GET
+	/account/subscriptions/status
+	Current subscription
+	POST
+	/account/subscriptions/checkout
+	Create Stripe checkout
+	POST
+	/account/subscriptions/webhook
+	Stripe webhook handler
+	GET
+	/account/subscriptions/portal
+	Stripe customer portal
+	GET
+	/account/api-keys
+	List API keys
+	POST
+	/account/api-keys
+	Create API key
+	DELETE
+	/account/api-keys/{id}
+	Revoke API key
+	Admin (admin/) — Firebase auth + admin role:
+Method
+	Path
+	Description
+	GET
+	/admin/status
+	System health + pipeline status
+	POST
+	/admin/system-commands
+	Create system command
+	GET
+	/admin/system-commands
+	List commands
+	GET
+	/admin/entitlements
+	View tier configuration
+	________________
+
+
+7. Application Lifecycle
+# api/main.py — v2
+
+
+import logging
+from contextlib import asynccontextmanager
+
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+
+from .config import Config
+from .database import init_pool, close_pool
+from .auth.firebase import init_firebase
+from .services.entitlements import load_tier_entitlements
+from .clients.registry import ClientRegistry
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
+
+
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application startup and shutdown."""
+    # --- Startup ---
+    config = Config.load()
+    app.state.config = config
+    logger.info(f"[STARTUP] Environment: {config.get('app.environment')}")
+
+
+    # Database
+    await init_pool(config)
+    logger.info("[STARTUP] Database pool initialized")
+
+
+    # Firebase auth
+    init_firebase(config)
+    logger.info("[STARTUP] Firebase initialized")
+
+
+    # Tier entitlements cache
+    await load_tier_entitlements()
+    logger.info("[STARTUP] Tier entitlements loaded")
+
+
+    # External clients
+    clients = ClientRegistry(config)
+    await clients.startup()
+    app.state.clients = clients
+    logger.info("[STARTUP] External clients initialized")
+
+
+    yield
+
+
+    # --- Shutdown ---
+    await clients.shutdown()
+    await close_pool()
+    logger.info("[SHUTDOWN] Clean shutdown complete")
+
+
+
+
+def create_app() -> FastAPI:
+    config = Config.load()
+
+
+    app = FastAPI(
+        title="SignalDelta API",
+        description="Information Asymmetry Leakage Detection Platform",
+        version=config.get("app.version", "2.0.0"),
+        lifespan=lifespan,
+    )
+
+
+    # CORS — use the configured origins, not a wildcard regex
+    env = config.get("app.environment", "production")
+    origins = config.get("app.cors.allowed_origins", [])
+    if env == "development":
+        origins += config.get("app.cors.allowed_origins_dev", [])
+
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["*"],
+    )
+
+
+    # Mount router groups
+    from .routers.v1 import scores, cascade, securities as v1_securities, research as v1_research
+    from .routers.app import (
+        securities, watchlist, alerts, research, conductor,
+        cohorts, backtest, radar, deepdelta,
+    )
+    from .routers.account import auth, users, subscriptions, api_keys
+    from .routers.admin import system, status
+
+
+    # Public API (versioned, API key auth)
+    for r in [v1_securities, scores, cascade, v1_research]:
+        app.include_router(r.router, prefix="/v1", tags=["public-api"])
+
+
+    # App API (Firebase auth)
+    for r in [securities, watchlist, alerts, research, conductor,
+              cohorts, backtest, radar, deepdelta]:
+        app.include_router(r.router, prefix="/app", tags=["app"])
+
+
+    # Account
+    for r in [auth, users, subscriptions, api_keys]:
+        app.include_router(r.router, prefix="/account", tags=["account"])
+
+
+    # Admin
+    for r in [system, status]:
+        app.include_router(r.router, prefix="/admin", tags=["admin"])
+
+
+    @app.get("/health")
+    async def health():
+        return {"status": "healthy", "version": config.get("app.version")}
+
+
+    return app
+
+
+
+
+app = create_app()
+________________
+
+
+8. Error Handling Convention
+All API errors follow a consistent envelope:
+# api/schemas/common.py
+
+
+from pydantic import BaseModel
+from typing import Optional
+
+
+class ErrorResponse(BaseModel):
+    error: str              # Machine-readable error code
+    detail: str             # Human-readable message
+    field: Optional[str]    # For validation errors, the field that failed
+Standard HTTP semantics:
+Code
+	When
+	400
+	Malformed request, invalid parameters
+	401
+	Missing or invalid authentication
+	403
+	Authenticated but insufficient tier/role
+	404
+	Resource not found
+	409
+	Conflict (e.g., duplicate watchlist entry)
+	422
+	Pydantic validation failure (FastAPI default)
+	429
+	Rate limit exceeded
+	500
+	Unhandled server error
+	________________
+
+
+9. Migration Path
+v2 is not a rewrite. It's a restructure. The migration is incremental:
+Phase 1: Configuration (1–2 days)
+* Create config/settings.toml and config/secrets.toml from existing .env
+* Implement Config class
+* Update config.py to delegate to new Config
+* All existing code continues to work — Config is additive
+Phase 2: Client Registry (1–2 days)
+* Implement ClientRegistry, LLMClient, ProviderClient
+* Update cohort_llm.py to use LLMClient instead of direct SDK calls
+* Update subscriptions.py to use StripeClient instead of module-level init
+Phase 3: Auth Consolidation (half day)
+* Replace 7 dependency functions with parameterized _authenticate
+* Add require_feature() and require_role() factories
+* All routers continue to work — the dependency signatures are compatible
+Phase 4: Router Restructure (2–3 days)
+* Create routers/v1/, routers/app/, routers/account/, routers/admin/ directories
+* Move existing router logic into new structure
+* Thin out routers by extracting business logic to services
+* Drop Arena, invites, comments, contact, lab routes (archive, don't delete)
+* Update main.py to new mounting pattern
+Phase 5: Service Layer (ongoing)
+* Extract inline business logic from routers into services
+* Implement new services (cascade, tempo) as they're built
+* Each new v2 service follows the pattern from day one
+Total estimated effort for Phases 1–4: 5–8 working days. The system is functional throughout — no big-bang cutover required.
+________________
+
+
+10. Open Questions for Implementation
+1. Redis for rate limiting? The v1 in-memory rate limiter resets on restart and doesn't work across workers. If you plan to run multiple uvicorn workers (or eventually multiple instances), Redis is the standard answer. But for a single-worker deployment, Postgres-backed rate limiting (check api_usage_log table with a window query) works and avoids adding another infrastructure dependency. Recommend: Postgres-backed for now, Redis when you need multi-worker.
+2. FINRA API key acquisition. The config structure is ready ([providers.finra] with enabled = false). The gap analysis quantified the impact: 3 families, 14+ signals, 4 cascade types moved toward detectability. This is a procurement task, not an engineering task. When the key arrives, flip enabled = true, add the key to secrets.toml, and the ProviderClient infrastructure is ready.
+3. Local LLM boundary. The PRD mentions Qwen on local GPU for high-frequency tasks. The [llm.models] config supports this — a local provider entry like "local:qwen2.5-7b" would route to a local inference server (vLLM, Ollama) via the same LLMClient interface. The boundary definition (which tasks use frontier models vs. local) is a cost optimization decision, not an architecture decision. The architecture supports both from day one.
+4. WebSocket for real-time. The PRD mentions near-real-time collection. The v2 API design is REST-only. If Conductor needs to push posture changes to the frontend in real time, add a WebSocket endpoint at /app/ws/conductor alongside the REST routes. FastAPI supports both. Don't add it until you need it.
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

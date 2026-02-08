@@ -1,0 +1,468 @@
+﻿SignalDelta Frontend v2 — Design Specification
+Version 1.0 DRAFT | February 8, 2026
+________________
+
+
+Canonical Reference
+This document defines the frontend implementation for SignalDelta's platform. It is subordinate to the Product Architecture — Core Systems Specification, which defines the four first-class pillars: SignalDelta Score, Conductor, Cascade, and Tempo. All frontend design decisions in this document serve those four pillars. See the Product Architecture document for the system interaction model and build sequence.
+________________
+
+
+I. Current State Assessment
+Stack: React 18 + TypeScript, Vite, TanStack Query, React Router, Tailwind CSS, Firebase Auth (client SDK).
+28 page routes in App.tsx, split between public (9) and protected (19). The frontend consumes the FastAPI backend via services/api.ts and domain-specific service modules (services/conductor.ts).
+Design language: Dark-mode analytical interface. Cyan primary (#06b6d4), amber accent (#f59e0b). Custom IALD-specific CSS utilities (.iald-buy-now, .tier-badge-s, .magnitude-extreme). Tailwind Typography plugin for rendered report content.
+Component weight distribution reveals product priorities:
+Component
+	Lines
+	What It Does
+	CohortTools.tsx
+	2,463
+	Cohort analytics: contagion alerts, arbitrage, beta, insider flow
+	SignalReplay.tsx
+	2,273
+	IALD score animation with Catmull-Rom spline canvas rendering
+	Conductor.tsx
+	827
+	Automated trading: brokerage connect, strategies, executions
+	Accuracy.tsx
+	717
+	Performance tracking: win rate, P&L, cohort performance
+	APIKeys.tsx
+	523
+	API key CRUD + usage stats (Research tier)
+	Lab.tsx
+	516
+	Hub page for 7 lab components
+	The two heaviest components (CohortTools, SignalReplay) are the analytical core. Conductor is the action layer. Accuracy is the accountability layer. These four define the product.
+________________
+
+
+II. Route Taxonomy — What Survives, What's Cut
+Decision aligned with API v2 cuts
+Route
+	Verdict
+	v2 Location
+	Notes
+	/ Landing
+	Keep
+	/
+	Public marketing page
+	/login
+	Keep
+	/login
+	Firebase auth
+	/pricing
+	Keep
+	/pricing
+	Stripe integration
+	/docs/api
+	Keep
+	/docs/api
+	API documentation — promoted to first-class
+	/privacy, /terms, /disclaimer
+	Keep
+	Same
+	Legal pages
+	/media
+	Evaluate
+	—
+	If unused, cut
+	/contact
+	Cut
+	—
+	Replace with mailto or Typeform
+	/dashboard
+	Keep
+	/dashboard
+	Home for authenticated users
+	/research/:ticker
+	Keep
+	/research/:ticker
+	Core: per-security IALD analysis
+	/watchlist
+	Keep
+	/watchlist
+	Core user feature
+	/alerts
+	Keep
+	/alerts
+	Core user feature
+	/reports
+	Keep
+	/reports
+	IALD research reports
+	/profile
+	Keep
+	/settings
+	Rename — "settings" is more accurate
+	/help
+	Keep
+	/help
+	User documentation
+	/status
+	Keep
+	/status
+	System health (tier-gated)
+	/lab
+	Restructure
+	See below
+	Break into promoted features + experimental
+	/custom-cohorts
+	Keep
+	/cohorts/custom
+	Nest under cohorts
+	/cohort-tools
+	Keep
+	/cohorts/tools
+	Nest under cohorts
+	/accuracy
+	Keep
+	/accuracy
+	Performance accountability
+	/deepdelta/:ticker
+	Keep
+	/research/:ticker/deep
+	Nest under research
+	/conductor
+	Keep
+	/conductor
+	Automated trading
+	/conductor/strategies
+	Keep
+	/conductor/strategies
+	Strategy management
+	/conductor/strategies/create
+	Keep
+	/conductor/strategies/new
+	Strategy creation
+	/conductor/strategies/:id/apply
+	Keep
+	/conductor/strategies/:id/apply
+	Strategy application
+	/conductor/executions
+	Keep
+	/conductor/executions
+	Execution history
+	Lab Restructuring
+The Lab page currently hosts 7 components in a tabbed interface. Several are core product features hidden inside an "experimental" container:
+Lab Component
+	Verdict
+	v2 Location
+	SignalReplay
+	Promote to standalone page
+	/signals/replay
+	SignalBacktester
+	Promote to standalone page
+	/signals/backtest
+	SignalRadar
+	Promote to standalone page
+	/signals/radar
+	ConfidenceHeatmap
+	Promote to standalone page
+	/signals/heatmap
+	DeepDeltaReports
+	Merge with /reports
+	Report type filter on reports page
+	MyCustomReports
+	Merge with /reports
+	Report type filter on reports page
+	PredictionArena
+	Cut
+	Aligned with API v2 Arena cut
+	Post-restructuring, the Lab page either becomes a minimal experimental sandbox or is eliminated entirely. The core analytical tools (replay, backtest, radar, heatmap) get their own routes and main navigation presence.
+v2 Route Map
+Public:
+  /                           Landing
+  /login                      Firebase auth
+  /pricing                    Stripe plans
+  /docs/api                   API documentation (promoted)
+  /privacy, /terms, /disclaimer   Legal
+
+
+Protected:
+  /dashboard                  Home — portfolio overview, recent signals
+  /research/:ticker           Security analysis (IALD report)
+  /research/:ticker/deep      DeepDelta deep analysis
+  /watchlist                  User watchlist
+  /alerts                    Alert management
+  /reports                   All reports (research, custom, deep delta)
+  /settings                  Profile, subscription, API keys
+
+
+  Signals (promoted from Lab):
+    /signals/radar            Live signal radar
+    /signals/replay           IALD score animation/replay
+    /signals/heatmap          Confidence heatmap
+    /signals/backtest         Signal backtesting
+
+
+  Cohorts:
+    /cohorts                  System cohorts overview
+    /cohorts/custom           Custom cohort management
+    /cohorts/tools            Cohort analytics tools
+
+
+  Conductor:
+    /conductor                Conductor dashboard
+    /conductor/strategies     Strategy list
+    /conductor/strategies/new Strategy creation
+    /conductor/strategies/:id/apply  Strategy application
+    /conductor/executions     Execution history
+
+
+  Platform:
+    /accuracy                 Performance accountability
+    /status                   System health (tier-gated)
+    /help                     Documentation
+Result: 28 routes → 25 routes. The reduction is modest because most v1 routes are legitimate features. The structural change is in organization (Lab dissolution, cohort nesting, signal promotion) rather than elimination.
+________________
+
+
+III. Frontend Architecture (v2)
+Service Layer Alignment with API v2
+v1 has a monolithic services/api.ts plus domain-specific modules (services/conductor.ts). v2 aligns the service layer with API v2 domain modules:
+src/
+├── services/
+│   ├── api.ts                 # Axios instance, auth interceptor, base config
+│   ├── signals.ts             # /api/v2/signals/* endpoints
+│   ├── market.ts              # /api/v2/market/* endpoints
+│   ├── users.ts               # /api/v2/users/* endpoints
+│   ├── platform.ts            # /api/v2/platform/* endpoints
+│   └── conductor.ts           # /api/v2/signals/conductor/* (exists, update prefix)
+Auth Interceptor (dual-mode)
+The frontend currently only uses Firebase tokens. v2 needs to support API key auth for the API documentation's "Try It" interface and for users who want to test their API keys in-browser:
+// services/api.ts
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api/v2',
+});
+
+
+api.interceptors.request.use(async (config) => {
+  // Check for API key mode (e.g., from API docs "Try It" panel)
+  const apiKey = localStorage.getItem('sd_api_key_test');
+  if (apiKey) {
+    config.headers['X-API-Key'] = apiKey;
+    return config;
+  }
+  
+  // Default: Firebase token
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+TanStack Query Configuration
+v1 has a 5-minute staleTime globally. v2 should differentiate by data freshness requirements:
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5,     // 5 min default
+      gcTime: 1000 * 60 * 30,       // 30 min garbage collection
+      retry: 1,
+      refetchOnWindowFocus: false,   // Don't refetch on tab switch
+    },
+  },
+});
+
+
+// Per-query overrides:
+// Signal radar: staleTime 30s (near real-time)
+// Price data: staleTime 60s
+// Research reports: staleTime 15 min (rarely change)
+// Entitlements: staleTime 1 hour
+// Static data (cohort lists, securities): staleTime 10 min
+________________
+
+
+IV. Component Architecture (v2)
+Large Component Decomposition
+The two 2,000+ line components need decomposition. They're not broken, but they're unmaintainable at this size.
+SignalReplay.tsx (2,273 lines) → decompose into:
+Sub-component
+	Responsibility
+	SignalReplayCanvas.tsx
+	Canvas rendering, Catmull-Rom splines, animation loop
+	SignalReplayControls.tsx
+	Playback controls, speed, overlay management
+	SignalReplayOverlays.tsx
+	Multi-security overlay logic
+	SignalReplayTooltip.tsx
+	Hover tooltip rendering
+	useSignalReplayData.ts
+	Data fetching hook (TanStack Query)
+	useSignalReplayAnimation.ts
+	Animation state machine hook
+	CohortTools.tsx (2,463 lines) → decompose into:
+Sub-component
+	Responsibility
+	ContagionAlerts.tsx
+	Contagion alert display and patient zero analysis
+	ArbitrageScanner.tsx
+	Cross-cohort arbitrage opportunity detection
+	CohortBetaAnalysis.tsx
+	Beta, Sharpe, volatility analytics
+	InsiderFlowSummary.tsx
+	Cohort-level insider transaction aggregation
+	CohortComparisonChart.tsx
+	Visual comparison rendering
+	useCohortAnalytics.ts
+	Shared data fetching hook
+	Design System Formalization
+v1 has ad-hoc IALD-specific CSS classes in index.css. v2 should formalize these into a component library:
+src/components/ui/
+├── Badge.tsx              # Tier badges (S/A/B/C/D/E/P/X)
+├── ScoreDisplay.tsx       # IALD score with verdict coloring
+├── MagnitudeIndicator.tsx # Extreme/Strong/Moderate/Weak
+├── VerdictBadge.tsx       # BUY NOW / BUY / NEUTRAL / SELL / SELL NOW
+├── TierGate.tsx           # Wraps content with tier check + upgrade prompt
+├── LoadingState.tsx       # Consistent loading indicators
+├── ErrorState.tsx         # Consistent error display
+└── EmptyState.tsx         # Consistent empty state
+The existing CSS classes (.iald-buy-now, .tier-badge-s, .magnitude-extreme) become the styling foundation for these components. The components add consistent behavior (tooltips, accessibility, responsive sizing) on top of the existing visual design.
+TierGate Component
+Replace scattered tier-checking logic with a declarative component:
+// Before (scattered in every page):
+if (tier !== 'research') {
+  return <div>Research tier required</div>;
+}
+
+
+// After (declarative):
+<TierGate required="research" feature="custom_cohorts">
+  <CustomCohortsList />
+</TierGate>
+
+
+// TierGate shows upgrade prompt if user's tier is insufficient,
+// renders children if allowed. Fetches entitlements from context.
+________________
+
+
+V. API Documentation Page (Promoted)
+The /docs/api route currently exists but is basic. As a first-class public API, the documentation page needs to be a product differentiator.
+Features needed:
+1. Interactive endpoint explorer — list all v2 endpoints with parameters, response schemas, and example responses
+2. "Try It" panel — users paste their API key, select an endpoint, fill parameters, and execute live requests against the API
+3. Code examples — Python, JavaScript, curl snippets auto-generated per endpoint
+4. Rate limit display — show the user's current tier rate limits and usage
+5. Authentication guide — explain both Firebase (web) and API key (programmatic) auth paths
+Implementation approach:
+FastAPI auto-generates OpenAPI specs. The documentation page can consume /api/v2/openapi.json and render it with a custom React component (not Swagger UI — it's ugly and doesn't match the design language). Libraries like @readme/api-explorer or a custom build on top of the OpenAPI spec provide the right level of control.
+________________
+
+
+VI. Pages to Merge: Settings
+v1 has /profile for user settings and API keys are a component inside Profile (gated to Research tier). v2 consolidates all user configuration into /settings with tabs:
+Tab
+	Content
+	Tier
+	Profile
+	Name, avatar, email
+	All
+	Subscription
+	Current plan, upgrade, billing history
+	All
+	API Keys
+	Key management, usage stats
+	Entry+
+	Notifications
+	Alert preferences, email/Slack config
+	Professional+
+	Preferences
+	Default timeframes, display settings
+	All
+	This is a standard SaaS settings pattern. The tab content is lazy-loaded (each tab is a separate component, only mounted when selected).
+________________
+
+
+VII. State Management
+v1 uses React Context for auth (AuthContext) and activity tracking (ActivityContext). TanStack Query handles server state. This is the right architecture — no Redux, no Zustand, no global store beyond auth.
+v2 additions:
+Context
+	Purpose
+	Notes
+	AuthContext
+	Firebase user, token, tier
+	Existing — add API key test mode
+	EntitlementContext
+	Tier entitlements, feature flags
+	New — replaces per-component tier checks
+	ActivityContext
+	User activity tracking
+	Existing
+	EntitlementContext wraps the tier_entitlements data from the API and provides canAccess(feature) and getLimit(limitType) helpers. Every TierGate component consumes this context. The data is fetched once on login and cached for 1 hour (entitlements rarely change mid-session).
+________________
+
+
+VIII. Build & Deployment
+Current
+Vite dev server on port 5173, proxied to API on port 8000. Production build served as static files (presumably via the API's static file mounts or a CDN).
+v2 Recommendations
+1. Keep Vite. It's fast, well-supported, and the React ecosystem has standardized on it.
+2. API proxy configuration:
+// vite.config.ts
+export default defineConfig({
+  server: {
+    proxy: {
+      '/api/v2': 'http://localhost:8000',
+    },
+  },
+});
+3. Environment variables:
+VITE_API_URL=/api/v2
+VITE_FIREBASE_CONFIG={"apiKey":"...","authDomain":"..."}
+VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
+4. Production serving: Vite builds to dist/. Serve via nginx or the API server's static mount. Nginx is preferred for production because it handles static files more efficiently than Python and can add caching headers, gzip, and Brotli compression.
+________________
+
+
+IX. Migration Strategy
+Phase 1: API Prefix Migration (non-breaking)
+* Update services/api.ts base URL from / to /api/v2
+* API v2 endpoints are deployed alongside v1
+* Frontend switches to v2 endpoints one service module at a time
+* No visual changes for users
+Phase 2: Route Restructuring
+* Implement new route structure (Lab dissolution, cohort nesting, signal promotion)
+* Add redirects from old routes to new routes (/lab → /signals/radar)
+* Update navigation components (Header, sidebar)
+Phase 3: Component Decomposition
+* Break SignalReplay and CohortTools into sub-components
+* Formalize design system components
+* Implement TierGate and EntitlementContext
+Phase 4: New Features
+* API documentation page upgrade
+* Settings page consolidation
+* Interactive API explorer
+________________
+
+
+Appendix: v1 → v2 Route Redirects
+v1 Route
+	v2 Route
+	Notes
+	/lab
+	/signals/radar
+	Default to radar as the most-used lab tool
+	/profile
+	/settings
+	Rename
+	/deepdelta/:ticker
+	/research/:ticker/deep
+	Nest under research
+	/custom-cohorts
+	/cohorts/custom
+	Nest under cohorts
+	/cohort-tools
+	/cohorts/tools
+	Nest under cohorts
+	/contact
+	External link
+	Cut from app
+	________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

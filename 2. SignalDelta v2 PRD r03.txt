@@ -1,0 +1,695 @@
+﻿SIGNALDELTA
+Information Asymmetry Leakage Detection
+
+
+  
+
+
+
+Platform v2 Product Requirements Document
+
+
+
+
+
+
+Table of Contents
+Table of Contents        2
+Executive Summary        4
+The Core Thesis        6
+Independent Measurements        6
+SignalDelta Overview (Detection and Scoring)        8
+Detection, Not Prediction        11
+The 8-to-72-Hour Window        12
+Core Services        13
+Service 1: The IALD Score        13
+What the Score Measures        13
+What the Score Does Not Measure        14
+Score Composition: Three Internal Components        15
+Service 2: The Information Cascade        17
+Cascade as Epistemological Map        17
+The Six Epistemological States of Cascade        19
+Cascade Path as Diagnostic Signal        22
+Score and Cascade Interaction        23
+Service 3: Tempo (Temporal Baseline and Contextualization)        25
+What It Does        25
+Cohort Lenses: The Same Security, Multiple Baselines        25
+What It Produces        27
+How Tempo Interacts with the Other Services        29
+What It Does Not Do        30
+Cohort Composition as Proprietary IP        30
+Current State        31
+Service 4: Conductor (Synthesis and Operational Response)        31
+Posture Category 1: Monitoring (Day-to-Day Operations)        32
+Posture Category 2: Assessment (Something Is Developing)        33
+Posture Category 3: Action (Time-Sensitive Response)        34
+Posture Category 4: Meta (System-Level Operational Intelligence)        37
+Summary        38
+Open Questions        40
+Scoring Model        40
+Cascade Detection        40
+Tempo        41
+Conductor        41
+Infrastructure        42
+Market and Regulatory        42
+Conclusion        43
+Appendix 1: Vocabulary Discipline        46
+Appendix 2: Backtesting        46
+1.1 Architecture        47
+1.2 Capabilities        47
+1.3 Output Schema        48
+1.4 Rate Limiting & Entitlements        49
+1.5 Known Limitations        49
+2. Future State: v2 Backtesting & Validation Framework        51
+2.1 Internal Signal Validation        51
+2.2 Customer-Facing Backtesting        52
+3. Implementation Priority        54
+4. Ethical & Regulatory Guardrails        55
+
+
+Executive Summary
+SignalDelta is an Information Asymmetry Leakage Detection (IALD) platform that detects when material non-public information is being acted upon in financial markets by analyzing behavioral anomalies in publicly available data. The core thesis: insider knowledge, when acted upon, leaves observable traces in options flow, dark pool activity, regulatory filings, on-chain transactions, and dozens of other public data streams. These traces are individually ambiguous but collectively measurable.
+  
+
+Version 2 of the platform represents an architectural and conceptual evolution from single-signal detection to a dual-measurement framework. v1 produced a single score per security. v2 recognizes that information asymmetry has two independently measurable properties: the intensity and direction of anomalous behavior (the IALD Score), and the structural propagation of awareness through market infrastructure (the Information Cascade). These are orthogonal measurements of related but distinct phenomena. Their interaction is where the product value concentrates.
+v2 introduces four core services:  SignalDelta, Conductor, Tempo, and Cascade. These services together provide something no existing platform offers: the ability to detect not just that asymmetry exists, but where in the information cascade the market currently sits and how much window remains before the asymmetry is priced in. The detectable window is typically 8 to 72 hours, varying by event type, security liquidity, and market conditions.
+
+
+  
+
+
+
+________________
+The Core Thesis
+Independent Measurements
+SignalDelta v2 rests on the recognition that information asymmetry in financial markets has independently observable properties that must be measured separately and interpreted together.
+The pipeline is sequential but not strictly linear — i.e. Tempo feeds back into SignalDelta's scoring, and Conductor's monitoring postures can trigger increased collection frequency in SignalDelta. The services are architecturally independent (communicating only through a shared database) but analytically interdependent.
+Service
+	Question It Answers
+	Output
+	SignalDelta
+	What is happening around this security?
+	IALD Score (magnitude, directional lean, agreement)
+	Cascade
+	Where in the information propagation sequence are we?
+	Epistemological state map (S0–S5), path diagnosis
+	Tempo
+	How abnormal is this relative to this security's rhythm and its cohort?
+	Temporal z-scores, approximate cascade position, window estimate
+	Conductor
+	Given all of the above, what is the appropriate posture and response?
+	Operational posture, alerts, research triggers, trade execution
+	The first three services are analytical — they measure, contextualize, and estimate. Conductor is operational — it synthesizes the analytical outputs into responses. This separation matters: the analytical services have no opinion about what the customer should do. Conductor translates analysis into posture based on defined criteria.
+________________
+SignalDelta Overview (Detection and Scoring)
+Question: Is there detectable information asymmetry around this security, and which direction does the behavioral evidence lean?
+What it does: SignalDelta collects public data from dozens of sources on automated cycles, extracts statistically anomalous behavioral patterns (signals), and aggregates those signals into per-security scores. It is the measurement engine.
+  
+
+
+
+
+
+
+
+What it produces:
+The IALD Score — a 0-to-100 measure of behavioral conviction among apparently informed market participants, centered at 50 (perfect market efficiency). Internally decomposed into three components:
+* Asymmetry Magnitude — total anomalous behavior detected, regardless of direction. Fed by all signals, both directional and non-directional. Answers: how much unusual activity exists?
+* Directional Lean — the aggregate directional weight of signals that carry directional information (options flow, insider buy/sell, short interest direction, analyst revision direction). Answers: which way does the detectable evidence point?
+* Agreement — the coherence of directional evidence across independent signal families. High agreement means most signals point the same way. Low agreement means signals conflict. Answers: do the signal families corroborate each other?
+The customer-facing score is a synthesis: 
+50 ± (magnitude × directional lean × agreement factor)
+What it does not do: SignalDelta does not predict price movement. It does not estimate fair value. It does not recommend action. It measures behavioral conviction — the degree to which apparently informed participants are acting in directionally coherent, statistically anomalous ways. The score reflects what people did, not whether they were right to do it.
+________________
+
+
+The IALD Score measures behavioral conviction. It quantifies the degree to which apparently informed market participants are behaving in a directionally coherent, statistically anomalous manner around a specific security. The score is centered at 50, representing perfect market efficiency — the theoretical state where all publicly available information is reflected in price and no participant has a detectable behavioral advantage over any other. A score above 50 indicates that the weight of detected anomalous behavior leans bullish. A score below 50 indicates a bearish lean. The distance from 50 represents the magnitude of behavioral conviction — how many independent signal families agree and how strongly they agree — not the expected magnitude of any price movement.
+This distinction is foundational and non-negotiable: the IALD Score measures conviction of informed behavior, not expected price movement. A score of 90 does not mean a security will increase significantly in value. It means that across multiple independent, heterogeneous data sources — options flow, dark pool activity, insider filings, regulatory patterns, and others — the behavioral evidence is overwhelmingly consistent. Many different types of apparently informed participants appear to be acting on asymmetric information, and they are acting in the same direction. The agreement across independent signal families is what pushes the score toward the extremes. The score measures behavioral coherence among apparently informed actors. It does not validate whether the information those actors possess is correct. An insider could trade on information that ultimately proves wrong. The IALD Score would still reflect the genuine behavioral anomaly.
+
+
+ Bell curve showing the aggregate IALD detection window from 8 to 72 hours, with four overlaid event-type distributions 
+
+Figure 1: IALD Detection Window Distribution. The aggregate curve (navy) is composed of distinct event-type profiles. Window duration varies by event type, security liquidity, and market conditions.
+The Information Cascade measures propagation state. It maps which layers of the market ecosystem have been reached by the information, regardless of how intense the behavioral conviction is. The cascade tracks a directed graph of six epistemological states — from private cognition through institutional process, infrastructure response, capital commitment, narrative formation, and finally consensus integration. Each state is defined by the form knowledge takes and the channels through which it is expressed, not by who specifically possesses it.
+The Score and the Cascade are orthogonal. A high IALD Score with an early-stage Cascade means strong anomalous behavior that hasn’t propagated — the maximum opportunity window. A high IALD Score with a late-stage Cascade means the trade is crowding and the window is closing. A low IALD Score at any Cascade stage means insufficient evidence to act. Conflating these two measurements — as v1 implicitly did — loses information in both directions.
+
+
+________________
+
+
+
+
+Detection, Not Prediction
+IALD does not predict market direction. It does not predict price targets. It does not recommend trades. It detects when the behavior of apparently informed participants is statistically anomalous relative to baseline, and it measures the directional coherence of that behavior across independent data sources.
+The system identifies smoke, not fire. What caused the smoke is unknowable from public data alone — if the cause were visible, there would be no asymmetry. The IALD Score tells the customer that smoke exists, how thick it is, and which direction the wind is blowing it. The Cascade tells the customer which rooms the smoke has reached. Together they tell the customer how much time they have to form their own thesis and act on it, if they choose to.
+The informed-but-wrong caveat: The IALD Score accurately measures behavioral anomalies regardless of whether the underlying information proves correct. Informed participants can be wrong. A deal can fall through. An earnings estimate can be based on flawed internal data. A regulatory action can be reversed. The score will faithfully reflect the behavioral conviction that existed at detection time. It measures what people did, not whether they were right to do it. This is an epistemological feature, not a limitation — it means the score is a reliable measure of observed behavior, not a speculative claim about outcomes.
+
+
+The 8-to-72-Hour Window
+Empirical observation across US equity markets shows that the period from first detectable behavioral anomaly to consensus price discovery typically spans 8 to 72 hours, with a median of approximately 28 to 32 hours. This is not a fixed constant. It is a distribution whose shape varies by event type.
+Insider and Form 4 driven events produce tight, early-peaking distributions (median ~18 to 22 hours) because the behavioral signal is concentrated and disclosure deadlines compress the window. Regulatory and policy cascade events produce wider, later-peaking distributions (median ~34 to 40 hours) because propagation traverses multiple institutional layers. Earnings-adjacent asymmetry peaks early (~14 to 20 hours) with an abrupt cutoff at the known announcement date. Geopolitical and macro events produce the widest, most irregular distributions with multiple peaks, because information propagates through multiple independent channels at different speeds.
+v2 estimates remaining window duration based on historical cascade propagation velocity for the specific security class and event type. This transforms the static 8-to-72-hour range into a dynamic, per-event estimate that the customer can use to calibrate their decision timing.
+
+
+________________
+
+
+
+
+
+________________
+Core Services
+Service 1: The IALD Score
+The IALD Score is a probabilistic measure of behavioral conviction among apparently informed market participants, expressed on a 0-to-100 scale centered at 50.
+
+
+  
+
+________________
+What the Score Measures
+* 50: Perfect market efficiency. Behavioral patterns around the security are consistent with normal market function. No detectable asymmetry. All publicly available information appears reflected in price.
+* 51–65: Low-to-moderate bullish behavioral conviction. Some anomalous activity detected leaning bullish, but insufficient independent corroboration across signal families or weak signal magnitude. Watch list territory.
+* 66–80: Moderate-to-high bullish behavioral conviction. Multiple independent signal families show directionally coherent anomalous behavior. The probability that this pattern is coincidental noise decreases with each corroborating signal family.
+* 81–100: High-to-extreme bullish behavioral conviction. Behavioral coherence across many independent signal families is overwhelming. Strongly suggests the presence of asymmetric information being acted upon.
+* 35–49: Low-to-moderate bearish behavioral conviction. Mirror of the 51–65 range in the bearish direction.
+* 20–34: Moderate-to-high bearish behavioral conviction. Mirror of the 66–80 range.
+* 0–19: High-to-extreme bearish behavioral conviction. Mirror of the 81–100 range.
+What the Score Does Not Measure
+The following are explicit exclusions. The IALD Score has no relationship to these quantities:
+* Expected price movement magnitude. A score of 90 does not indicate a larger expected price change than a score of 70. Both indicate behavioral conviction. The magnitude of any eventual price movement is a function of the underlying information, which IALD does not and cannot assess.
+* Fundamental valuation. The score is not an upgrade or downgrade. It contains no opinion about fair value, intrinsic worth, or price targets. It observes behavior, not fundamentals.
+* Correctness of informed participants. The score measures that apparently informed actors are behaving with directional conviction. It does not validate their thesis. They may be wrong.
+* Timing of price movement. The score reflects current behavioral conditions. It does not predict when, or whether, the market will respond. Cascade position provides the temporal context that the score alone cannot.
+
+
+Score Composition: Three Internal Components
+  
+The customer-facing score is a single number. Internally, it is composed of three independently computed components that are available via API for sophisticated consumers who want the decomposition:
+* Asymmetry Magnitude: How far from efficient is this security right now? Fed by ALL signals, both directional and non-directional. A filing tempo deviation contributes to magnitude regardless of directional lean. Dark pool volume anomaly contributes before accumulation-vs-distribution is determined. This component answers: how much total anomalous behavior exists?
+* Directional Lean: Of the signals that carry directional information — options flow direction, insider buy/sell, short interest changes, analyst revision direction — what is the aggregate directional weight? This component answers: which way does the detectable evidence point?
+* Agreement: How coherent is the directional evidence? A score of 67 with high agreement means most directional signals point the same way. A score of 67 with low agreement means directional signals conflict but one side slightly outweighs the other. Same score, different confidence in the directional lean. This component answers: do the signal families agree with each other?
+The customer-facing score synthesizes these: 50 ± (magnitude × directional lean × agreement factor). The decomposition matters because a score near 50 can mean two very different things: either the market is genuinely efficient around this security (low magnitude, no anomaly), or there is significant asymmetric activity but the informed participants disagree with each other (high magnitude, conflicting direction, low agreement). The three-component model distinguishes these cases.
+
+
+________________
+Service 2: The Information Cascade
+Cascade as Epistemological Map
+When asymmetric information enters the market ecosystem, it propagates through a series of epistemological states in a roughly predictable but non-linear sequence. Each state is characterized by who knows, in what form they know it, and through which channels the knowledge is expressed. The Cascade is a structural and temporal map of this propagation.
+The Cascade is a directed graph with typical ordering but variable paths. The stages represent epistemological states, not calendar checkpoints. This distinction matters for implementation: the system must identify which states have evidence and which do not, rather than assuming linear progression from Stage 0 through Stage 5.
+
+
+  
+
+Question: Where in the information propagation sequence is this event, and which path is it taking through the market ecosystem?
+What it does: The Cascade detector monitors which of six epistemological states show evidence of information awareness, infers the current cascade stage, and diagnoses the propagation path. It operates as Layer 3 of the analytical stack — above individual signal extraction (Layer 1) and per-security scoring (Layer 2).
+What it produces:
+* Cascade Stage Estimate (S0–S5) — which epistemological states currently have observable evidence. This is not a single number but a state map: S1 may show evidence while S2 does not, meaning information has entered institutional channels but has not yet changed infrastructure parameters.
+* Path Diagnosis — the specific sequence of states showing evidence, mapped against known cascade archetypes. An S0→S3→S4 path (private cognition directly to capital commitment to narrative, skipping institutional process and infrastructure response) is diagnostic of insider trading. An S0→S1→S2→S3 path (full institutional cascade) is diagnostic of regulatory/policy events.
+* Propagation Velocity — how fast the cascade is advancing through stages, measured as a rate of change. An accelerating cascade means the window is compressing. A stalled cascade means the information may be contained at its current stage.
+The relationship to SignalDelta scoring: Cascade stage is computed from the same underlying signals as the IALD Score, but through a different lens. The Score asks "how much anomalous behavior and which direction?" The Cascade asks "which types of signals are active, and what does the pattern of active signal types tell us about propagation?" The same options flow anomaly contributes to the Score as a directional magnitude and to the Cascade as evidence of S3 (Capital Commitment).
+What it does not do: The Cascade does not assess conviction intensity — that is the Score's job. A cascade can be at S3 with either a high or low IALD Score. The Cascade measures where information has reached, not how loudly it's being acted upon.
+
+
+________________
+
+
+
+
+
+
+The Six Epistemological States of Cascade
+S0: Private Cognition. Information exists in human minds or restricted documents. A congressional staffer reads a draft regulation. A CFO knows earnings will miss. An OFAC official prepares a designation. Acquisition negotiations are underway. No observable market behavior. Theoretically undetectable by any public data system. However, S0 almost never remains perfectly contained — humans are leaky. The behavioral side effects of S0 knowledge (a phone call that changes a borrow rate, a wallet transfer, a lobbying filing) are what create the transition to subsequent stages.
+S1: Institutional Process. Information has entered organizational workflows. Compliance reviews, regulatory proceedings, legal analysis, advisory publications. Knowledge has moved from individuals to institutions — multiple people at multiple firms now know pieces of the picture, even if none have the complete picture. Observable through: DTCC Important Notices, law firm client alert velocity, SEC filing activity, regulatory comment periods, compliance desk restrictions. These signals say "institutions are processing something" without revealing what.
+S2: Infrastructure Response. Information has changed the rules of the game. Margin requirements adjusted. Borrow rates shifted. Circuit breaker thresholds modified. Market makers widening spreads on specific names. Knowledge has become embedded in prices and parameters, not just documents. This stage is where the cascade becomes self-reinforcing: a margin increase forces position reductions, which creates order flow, which triggers algorithms. Observable through: options implied volatility shifts, borrow rate changes, dark pool volume anomalies, futures basis moves.
+S3: Capital Commitment. Information has been converted into positions. Money is committed. Sophisticated participants — quant funds, prop desks, informed discretionary managers — are actively trading. This is peak asymmetry in terms of behavioral leakage, because committed capital leaves traces that are far more detectable than information passing between humans. Observable through: options flow clustering, dark pool print patterns, unusual volume in specific strikes, on-chain whale movements, short interest changes. This is where the IALD Score is most reliable, because the behavioral evidence is densest.
+S4: Narrative Formation. Information has been compressed into a communicable story. A Bloomberg headline appears. An analyst publishes a note. FinTwit lights up. The nuance of Stages 0 through 3 has been reduced to a headline. This is the beginning of the end of the IALD window, because narratives travel through social networks faster than data travels through market infrastructure. Observable through: media mention velocity, analyst note publication rate, social media acceleration. These signals are confirmatory, not predictive — they tell you the cascade is nearly complete.
+S5: Consensus Integration. Information is fully reflected in prices and widely understood. Reddit threads. Robinhood notifications. CNBC segments. Knowledge has become consensus. There is no more information advantage because there is no more information gap. The IALD Score returns toward 50 as behavioral patterns normalize. The window is closed.
+ Iceberg visualization showing cascade stages from S5 Consensus above the waterline to S0 Private Cognition at the deepest level 
+
+Figure 2: The Information Cascade Iceberg. The vast majority of market-relevant information activity is invisible to most participants. IALD detects behavioral disturbances at S1–S3 before events surface at S4–S5.
+________________
+
+
+Cascade Path as Diagnostic Signal
+The cascade does not always flow S0→S1→S2→S3→S4→S5 in sequence. The specific path through the directed graph is itself a diagnostic signal that reveals the type of asymmetry event. Examples include:
+* S0→S1→S2→S3→S4→S5 (full regulatory cascade): Policy formed, institutions processed it, infrastructure adjusted, sophisticated participants positioned, then media reported. This is the textbook path for regulatory or policy-driven events.
+* S0→S3→S4→S5 (insider trading cascade): Someone with private information traded directly, skipping institutional channels entirely. No S1 or S2 evidence. The absence of institutional process signals alongside capital commitment signals is itself a diagnostic indicator.
+ Directed graph showing six epistemological states with multiple possible transition paths, highlighting a regulatory cascade and an insider trading cascade 
+
+Figure 3: The Cascade Directed Graph. Gray edges show all possible transitions. Bold paths show two observed cascade types: a regulatory cascade (S0→S1→S2→S3→S4→S5) and an insider trading cascade (S0→S3→S4→S5). The path through the graph is diagnostic of event type.
+* S0→S4 (media leak): Private information leaked directly to a journalist, bypassing market activity entirely. No options anomaly, no dark pool signal — just a headline. This produces a cascade that starts at S4 and then flows backward as the market reacts.
+* S2↔S3 (feedback loop): Heavy positioning (S3) forces infrastructure recalibration (S2), which creates new constraints, which forces further positioning. This self-reinforcing cycle is characteristic of stress events and can accelerate the cascade dramatically.
+The path diagnosis helps the customer understand not just that asymmetry exists, but what kind of event is likely driving it — without ever needing to know the specific information. A regulatory cascade has different implications for position sizing and timing than an insider trading cascade.
+Score and Cascade Interaction
+The IALD Score and the Cascade are orthogonal measurements. Their interaction defines four operational quadrants:
+* High Conviction + Early Cascade (Maximum Window): Strong anomalous behavior, minimal propagation. Multiple independent signal families detect directionally coherent activity, but the information has not reached institutional processes or market infrastructure. The time advantage is at its widest. This is the golden zone — someone is acting aggressively on information that most of the market hasn’t processed.
+ Quadrant chart showing behavioral conviction magnitude on the vertical axis versus cascade propagation stage on the horizontal axis, with example data points 
+
+Figure 4: IALD Behavioral Conviction vs. Information Cascade Stage. The vertical axis measures absolute deviation from IALD 50 (direction indicated per data point). Example securities illustrate the four operational quadrants and the typical lifecycle trajectory from Maximum Window to Consensus.
+
+
+* High Conviction + Late Cascade (Closing Window): Strong anomalous behavior, widespread propagation. The asymmetry is being acted upon by an expanding pool of participants. The information advantage is narrowing. Crowded positioning increases the risk of reversal. The remaining window is short.
+* Low Conviction + Early Cascade (Watch List): Weak anomalous behavior, minimal propagation. Some anomalous activity detected but insufficient independent corroboration to establish directional confidence. Could be the earliest stages of a subtle event, or could be noise. Monitor for escalation across additional signal families.
+* Low Conviction + Late Cascade (Efficient / No Advantage): Behavioral patterns consistent with normal market function. Information, if any, is already reflected in price. No detectable asymmetry. Alternatively, the rare case where widely known information has not been acted upon — everyone knows but nobody cares, and they should. This case is detectable by the divergence between late cascade stage and near-50 score.
+
+
+The curved arrow in the chart traces the typical lifecycle: a high-conviction event enters in the upper-left quadrant (Maximum Window), propagates rightward as the cascade advances (Closing Window), and then decays downward as the asymmetry is priced in and behavioral patterns normalize (Efficient). The speed of this traversal is the detection window — typically 8 to 72 hours.
+
+
+________________
+
+
+Service 3: Tempo (Temporal Baseline and Contextualization)
+Question: Is what we're observing around this security normal for this security — and normal when viewed through each of its cohort lenses?
+What It Does
+Tempo establishes the historical rhythm of information flow for each tracked security, then measures current activity against those baselines to produce contextualized deviations. It is the service that transforms raw signal detections into meaningful anomalies.
+Without Tempo, all signals are treated equally regardless of context. A Form 4 filing is a Form 4 filing. An 8-K is an 8-K. A dark pool volume spike is a dark pool volume spike. There is no way to distinguish between a routine event and a dramatic departure from pattern, because there is no pattern to depart from.
+With Tempo, every signal is measured against the security's own behavioral history. The same Form 4 filing produces a z-score of +0.3 for a company where insiders trade monthly and a z-score of +3.2 for a company where insiders trade twice per year. The raw event is identical. The Tempo context makes one ignorable and the other a potential IALD signal.
+But Tempo does more than individual security baselines. It applies cohort lenses — and this is where the service becomes structurally important to the entire platform.
+Cohort Lenses: The Same Security, Multiple Baselines
+A single security belongs to multiple cohorts simultaneously. Each cohort represents a different lens through which the security's behavior can be evaluated. Microsoft is simultaneously a member of an AI infrastructure cohort, a cloud providers cohort, a productivity software cohort, and a regulatory antitrust exposure cohort. Each cohort defines a different peer group and therefore a different baseline for what "normal" looks like.
+This matters because the same corporate event produces different Tempo deviations depending on which lens you apply:
+* Microsoft announces a $10B AI compute expansion. Viewed through the AI infrastructure lens, this is unremarkable — NVDA, META, and GOOG announced similar expansions this quarter. Cohort-relative deviation is low. The sector is moving together.
+* The same announcement viewed through the cloud providers lens is highly anomalous — AMZN, GOOG, and ORCL have not announced equivalent expansions. MSFT is the outlier in this peer group. Cohort-relative deviation is high.
+Same event. Same company. Different lens. Different baseline. Different signal. The cohort determines whether the behavior is normal or anomalous.
+  
+
+
+
+This multi-lens architecture is what allows Tempo to approximate how a company's distinct business units face risk and generate revenue. Traditional sector classification assigns Microsoft to "Technology" or "Software" — one label, one peer group, one baseline. Tempo assigns Microsoft to every cohort that reflects a material dimension of its business, and evaluates deviations through each lens independently.
+What It Produces
+Self-Relative Z-Scores
+For each event category, how many standard deviations is current behavior from this security's own rolling historical baseline? Tempo tracks baselines across the following categories:
+* Filing compliance tempo — 8-K, 10-K, 10-Q, proxy statement, amendment filing frequency and timing. A company that has filed its 10-K on the third Tuesday of March for fifteen years and suddenly requests an extension is a +4σ filing tempo deviation. A company that amends a filing within 72 hours of the original is anomalous relative to its own amendment history.
+* Insider transaction rhythm — Form 4 filing frequency, typical transaction sizes, seasonal patterns tied to options vesting schedules and 10b5-1 plan execution dates. Deviations from the individual security's insider behavior pattern.
+* Guidance and estimate dispersion — width of company guidance range relative to historical guidance precision. Analyst estimate spread between highest and lowest estimates. Changes in dispersion width. Dispersion widening means disagreement among analysts. Disagreement means someone has different information.
+* Options activity baseline — new open interest creation rate, volume relative to historical norms for the specific security, strike distribution patterns. The tempo of options activity, not just its level.
+* Dark pool print frequency — ratio of dark pool to lit exchange volume, print frequency and size distribution. Deviations from the security's own historical dark pool pattern.
+* Media and analyst tempo — analyst note publication rate per security, media mention frequency. The velocity of coverage, not its sentiment. Four analyst notes in one day for a stock that normally gets one per week is a tempo signal regardless of what the notes say.
+* Corporate activity rhythm — debt issuance patterns, restructuring announcements, government grant applications and awards, capital expenditure guidance changes. Deviations from the company's own historical corporate activity cadence.
+Cohort-Relative Z-Scores
+For the same event categories, how does this security's current behavior compare to the collective behavior of its cohort peers — through each cohort lens independently? This enables three levels of deviation detection:
+* Security deviates, cohort does not. Company-specific event. The deviation is not explained by sector-wide conditions. This amplifies the signal — something is happening to this company specifically.
+* Security and cohort deviate together. Sector-level or macro event. All peers are showing similar anomalous behavior. This changes the interpretation — the signal may be about the sector, not the individual security. Tempo flags this as a cohort-level event and adjusts the per-security signal weight accordingly.
+* Security does NOT deviate while cohort does. Notable absence. The cohort is reacting to something and this security is not — yet. Either the security is insulated from whatever is affecting its peers, or the information has not yet reached this company. Tempo flags the absence as a watch condition.
+Critically, Tempo evaluates cohort-relative deviations through each lens independently. Microsoft may show a normal deviation through its AI infrastructure lens and an extreme deviation through its cloud providers lens simultaneously. Both evaluations are produced. Both feed into SignalDelta's scoring. The lens that shows the anomaly tells the system — and the customer — which dimension of the business is exhibiting unusual behavior.
+Approximate Cascade Temporal Position
+By comparing current Tempo deviation patterns against historical profiles of how deviations evolved during past cascade events for this security class, Tempo estimates approximately where in the 8-to-72-hour window the current event sits.
+This is probabilistic, not precise. It is pattern matching: "the current deviation profile for this mid-cap semiconductor company — filing tempo anomaly plus options velocity increase plus cohort-relative dark pool deviation — most closely resembles hour 14-22 of historical regulatory cascade events in this security class." Even this rough estimate is operationally valuable, because it tells the customer and Conductor whether the window is early, mid, or late.
+Window Estimate
+The approximate remaining time before the asymmetry is likely to reach consensus price discovery, derived from the cascade temporal position and the historical propagation velocity for this security class and event type.
+The window estimate is expressed as a range, not a point — e.g., "estimated 14–26 hours remaining." It is accompanied by a confidence qualifier and a historical comparison: "In N similar past events for this security class, the window from current cascade position to S4 was X–Y hours in 80% of cases."
+Structural Break Detection
+When a security's baseline itself has changed — a new CFO alters filing practices, a merger restructures the company, a sector rotation shifts cohort dynamics — Tempo detects the break and flags that previous baselines are no longer valid.
+This prevents false positives from legitimate behavioral changes unrelated to information asymmetry. A company that hires a new IR team and starts filing 8-Ks at different times is not exhibiting asymmetric behavior. It has structurally changed its disclosure rhythm. Tempo detects the break, enters a recalibration period (configurable, default 60 days), and reduces Tempo weighting in the IALD Score until the new baseline stabilizes.
+How Tempo Interacts with the Other Services
+Tempo → SignalDelta: Tempo z-scores feed back into SignalDelta as signal weighting multipliers. Signals that represent large deviations from the security's own Tempo baseline receive amplified weight in the IALD Score. Signals that fall within normal Tempo range receive standard or reduced weight. This means the same raw signal — a Form 4 filing, a dark pool print — produces different Score contributions depending on the security's behavioral history.
+Tempo → Cascade: Tempo provides the temporal context that Cascade uses for window estimation. Cascade knows which stages have evidence. Tempo knows how fast information historically propagates for this security class and event type. Together they produce the window estimate.
+Tempo → Conductor: Tempo deviations are directly available as conditions in Conductor's rule engine. A customer can configure rules that reference Tempo — e.g., "alert me when any security in the semiconductor cohort shows a self-relative filing tempo deviation above 2.5σ" or "trigger research report when cohort-relative deviation exceeds 2σ through any lens." Tempo drift (gradual baseline shift without IALD threshold breach) is a Conductor monitoring posture that relies entirely on Tempo's output.
+What It Does Not Do
+Tempo does not create or update IALD scores. It does not assess direction. It does not execute. It does not know or care whether the IALD Score is bullish or bearish. It contextualizes. It answers "is this normal?" and "approximately when?" — questions that make the other services' outputs interpretable. And the mechanism is the measurement of time series data to develop the Z-Score. 
+Cohort Composition as Proprietary IP
+Cohort membership selection is proprietary and not disclosed to customers. Cohorts are referenced by name only. Customers receive cohort-relative context — "this security is deviating from its peer group" — without knowing which specific securities comprise the peer group.
+The multi-lens cohort architecture is itself defensible IP. Defining which companies belong in which cohorts, how many lenses to apply per security, and how to weight deviations across lenses requires domain expertise that is not trivially replicable. The cohort definitions approximate the actual business-unit-level risk and revenue structure of each security — a structural insight that standard sector classifications do not capture.
+Outlier identification within cohorts is never disclosed. The detection of which security is behaving anomalously relative to its cohort is itself valuable information. Disclosing it would transfer the informational advantage from SignalDelta to the customer and potentially into the market.
+Current State
+Conceptual design complete. Not implemented. Implementation requires: per-security event time-series database, rolling baseline calculation engine, multi-dimensional cohort membership definitions, per-lens z-score computation, structural break detection algorithm, historical cascade profile library for temporal position estimation.
+
+
+
+
+
+
+Service 4: Conductor (Synthesis and Operational Response)
+Question: Given the Score, the Cascade position, and the Tempo context, what is the appropriate operational posture and response?
+What it does: Conductor is the synthesis layer. It consumes the analytical outputs of SignalDelta, Cascade, and Tempo, and produces operational responses based on rules that the customer defines. Conductor is the only service that takes action. The other three services measure, map, and contextualize — they have no opinion about what should be done. Conductor translates analysis into posture.
+A critical distinction: Conductor produces postures, not just trades. A trade is one possible response. But "Wait" is also a Conductor output — a deliberate posture based on the synthesis of Score, Cascade, and Tempo that means "we see something, we know where it is in the cascade, we have an approximate window estimate, and the correct response right now is to hold and monitor." Wait is not the absence of a decision. It is a decision.
+What it produces:
+Conductor outputs fall into four categories of operational posture. Each posture is the result of synthesizing Score, Cascade, and Tempo against the customer's configured rules and thresholds.
+________________
+  Posture Category 1: Monitoring (Day-to-Day Operations)
+These are steady-state postures. The system is operating normally. Conductor's role is to maintain appropriate vigilance and surface emerging patterns before they reach action thresholds.
+Baseline Monitoring No anomalous behavior detected. All tracked securities within normal Tempo ranges. Standard collection cycles continue. This is the default posture for the majority of securities at any given time. Trigger: IALD Score within ±3 of 50 for all tracked securities. No Tempo deviations above 1σ.
+Elevated Watch Low-conviction signal detected on a specific security. Insufficient corroboration across signal families to generate an alert, but enough anomalous behavior to warrant increased attention. Trigger: IALD Score between 55–65 or 35–45. Fewer than 3 signal families contributing. Tempo deviation between 1σ and 2σ. Action: Increase collection frequency for this security. Flag for next review cycle. No customer notification unless configured for low-threshold alerts.
+Cohort Sympathy Watch A peer security within a shared cohort is showing meaningful IALD deviation, but this security is not — yet. Monitor for sympathetic movement. If the cohort peer's deviation is driven by a sector-level catalyst, this security may follow. Trigger: Cohort peer crosses IALD threshold (configurable). This security remains near 50. Tempo cohort-relative analysis shows the peer is deviating while this security is not. Action: Increase collection frequency. Pre-stage a research report template. Alert customer if configured for cohort-awareness notifications.
+Tempo Drift The security's information rhythm is shifting over a multi-day or multi-week period, but the shift is gradual and hasn't triggered IALD thresholds. This could be early-stage institutional accumulation, a slow-developing regulatory process, or a structural change in the company's disclosure behavior. Trigger: Tempo rolling baseline shows a statistically significant trend (not just a spike) in one or more event categories. IALD Score has not materially moved. Action: Flag for periodic review. If drift persists beyond configurable duration, escalate to Assessment posture.
+________________
+
+
+Posture Category 2: Assessment (Something Is Developing)
+These postures indicate that the analytical services have detected meaningful activity that requires interpretation. Conductor's role is to produce the analytical products that help the customer understand what's developing.
+Research Trigger IALD Score has crossed a configurable threshold. Sufficient signal diversity exists to produce a meaningful research report. Conductor auto-generates the report and delivers it through the customer's preferred channel (email, dashboard, API push). Trigger: IALD Score crosses customer-defined research threshold (default: ±10 from 50, i.e., above 60 or below 40). At least 3 signal families contributing. Output: Auto-generated research report containing: IALD Score with component decomposition, active signal families and their individual contributions, Tempo context (self-relative and cohort-relative z-scores), cascade stage estimate if sufficient data exists, and historical accuracy for the signal combination detected.
+Cascade Mapping Sufficient signals exist across multiple cascade stages to construct a propagation map. Conductor presents the path diagnosis — which stages show evidence, which are dark, and what the pattern suggests about event type. Trigger: Evidence detected in 2 or more non-adjacent cascade stages (e.g., S1 and S3 both active, S2 dark). Or evidence in 3+ sequential stages. Output: Cascade state map, path diagnosis with archetype match (regulatory cascade, insider cascade, media leak, etc.), propagation velocity estimate.
+Contested Conviction Alert IALD magnitude is high but agreement is low. Informed participants appear to be on both sides. This is not a "nothing is happening" situation — it's a "something significant is happening but the informed actors disagree about direction" situation. This is qualitatively different from a neutral Score and the customer needs to know the difference. Trigger: Asymmetry Magnitude above threshold (configurable, default: 15+ points from 50). Agreement component below threshold (configurable). Directional signals in conflict. Output: Alert with conviction decomposition showing which signal families lean bullish, which lean bearish, and the magnitude of each. Tempo context. Note that contested conviction often precedes resolution — when the disagreement resolves, the Score may move sharply in the winning direction.
+Window Estimation Cascade position and Tempo data are sufficient to produce a probabilistic estimate of remaining window duration. This is the countdown. Trigger: Cascade at S1–S3 with IALD Score above action threshold. Tempo has sufficient historical cascade data for this security class to generate a velocity estimate. Output: Estimated remaining window (hours, expressed as a range — e.g., "12–28 hours based on historical mid-cap regulatory cascade propagation"). Confidence level. Historical comparison: "In N similar past events for this security class, the window from current cascade position to S4 was X–Y hours in 80% of cases."
+________________
+
+
+Posture Category 3: Action (Time-Sensitive Response)
+These postures indicate that the synthesis of Score, Cascade, and Tempo has met criteria for immediate operational response. Conductor's role is to execute the customer's predefined response playbook. Speed matters.
+Threshold Alert IALD Score has crossed a customer-defined action threshold. This is the primary "something is happening, pay attention now" signal. Trigger: IALD Score crosses customer-defined alert threshold (configurable per security, per cohort, or globally — e.g., above 72 or below 28). Output: Immediate notification through configured channels (email, SMS, push notification, Slack webhook, API event). Includes: Score, component decomposition, cascade stage, Tempo context, window estimate if available, link to full research report.
+Cascade Acceleration Alert The cascade is propagating faster than historical norms. The window is compressing. Whatever the customer planned to do, they have less time than the baseline estimate suggested. Trigger: Cascade propagation velocity exceeds 1.5× historical norm for this security class and event type. Or: two cascade stages advanced within a single collection cycle when historical norm is multi-cycle progression. Output: Urgent notification. Updated window estimate. Comparison to historical velocity. Note that cascade acceleration often correlates with high-impact events — the cascade moves faster because more actors are responding simultaneously.
+  
+
+Convergence Alert Multiple securities within a cohort are simultaneously crossing IALD thresholds. This is a sector-level or macro event signal. Individual security alerts are important; simultaneous cohort alerts are potentially market-moving. Trigger: 3+ securities within a single cohort cross IALD thresholds within a configurable time window (default: 4 hours). Or: cohort-level Tempo deviation exceeds 2.5σ across the cohort. Output: Cohort-level alert identifying all affected securities, their individual Scores and cascade stages, and the cohort context. Note: cohort membership is not disclosed, but the customer is told "this security is part of a peer group showing correlated anomalous behavior." The customer can infer sector exposure without knowing the exact cohort composition.
+Trade Execution User-defined rule conditions have been met. Conductor executes through the customer's connected brokerage account. This is the most operationally consequential Conductor output and requires the highest confidence in the analytical inputs. Trigger: Customer-defined composite rules — e.g., "IALD Score above 75 AND Cascade at S2 or earlier AND Tempo self-relative z-score above 2σ AND agreement component above 0.7." Rules are fully configurable; these are examples. Output: Trade order submitted via brokerage OAuth (Alpaca, Tradier). Execution log entry with full analytical snapshot at time of execution (Score, Cascade, Tempo, all component values). Position tracking initiated.
+  
+
+Position Adjustment An existing position is held in a security where the analytical picture has changed. Cascade has advanced to late stage. Or IALD Score has reversed direction. Or Tempo indicates the window estimate has expired. Rules dictate the adjustment. Trigger: Customer holds a position AND cascade advances to S4+ (configurable). Or: IALD Score reverses direction (crosses back through 50). Or: window estimate expires without price discovery (possible false positive — the "informed but wrong" case). Output: Position reduction or exit order per customer rules. Execution log with analytical snapshot. Post-trade analysis queued.
+Hedge Trigger Bearish conviction above threshold on a security the customer holds long. Or bullish conviction on a security the customer is short. Defensive action rules dictate protective positioning. Trigger: IALD Score crosses into opposing-direction threshold relative to customer's existing position. Cascade at S2 or later (information has reached infrastructure, not just a stray signal). Output: Protective order per customer rules (put purchase, stop-loss placement, position trim). Execution log with full analytical snapshot.
+________________
+
+
+Posture Category 4: Meta (System-Level Operational Intelligence)
+These postures are about the health and validity of the analytical pipeline itself. Conductor monitors not just market conditions but the integrity of its own inputs.
+Collection Failure Alert A data source has gone dark, returned anomalous metadata, or failed to update within its expected cycle. The absence of data is itself potentially a signal — a government database going offline before a holiday weekend, an exchange feed timing out during volatile conditions — but it's also an operational concern because missing data means missing signals. Trigger: Collector fails to return data within expected cycle window. Or: returned data shows structural anomalies (schema change, empty response where data was expected, dramatic change in volume of returned records). Output: Operational alert to system administrator. If the failed collector covers a security with an active IALD signal, escalated alert noting reduced signal coverage. Graceful degradation: Score is recalculated with reduced signal family count and flagged as "partial coverage."
+Tempo Recalibration A structural break has been detected in a security's baseline. Previous baselines are no longer valid. This happens when companies change CFOs, complete mergers, restructure operations, or shift disclosure practices. Using outdated baselines would generate false positives. Trigger: Tempo structural break detection algorithm identifies a statistically significant level shift or trend change in one or more event categories for a security. Output: Flag security for baseline recalibration. Temporarily reduce Tempo weighting in IALD Score until new baseline stabilizes (configurable stabilization period, default: 60 days). Notify customer that Tempo context for this security is in recalibration.
+Cohort Composition Review A cohort's internal correlation structure has changed. Securities that used to move together no longer do, or new correlations have emerged. This suggests the cohort definition needs updating — the market relationships that defined the cohort have shifted. Trigger: Intra-cohort correlation drops below threshold over a rolling window. Or: a security consistently shows zero cohort-relative deviation despite large self-relative deviations, suggesting it no longer belongs in the cohort. Output: Flag cohort for review. This is an internal analytical maintenance task, not a customer-facing alert. Cohort composition changes are proprietary IP and are implemented internally after review.
+Data Source Quality Degradation A data source is returning data but the quality has degraded — increased latency, reduced granularity, changed schema, or suspicious patterns suggesting the source itself has been compromised or restructured. Trigger: Statistical monitoring of data source quality metrics (latency, record count, schema consistency, value distributions) detects sustained deviation from historical norms. Output: Operational alert. If degradation is severe enough to affect signal reliability, affected signals are flagged and their weight in the IALD Score is reduced until quality is restored or the source is replaced.
+________________
+
+
+
+
+Summary
+SignalDelta v2 is an Information Asymmetry Leakage Detection platform built on a multi-measurement framework. It detects when material non-public information is being acted upon in financial markets by analyzing behavioral anomalies in publicly available data, and it maps how far that information has propagated through the market ecosystem.
+The platform comprises four core services:
+SignalDelta measures behavioral conviction — the degree to which apparently informed market participants are acting in directionally coherent, statistically anomalous ways around a specific security. It produces the IALD Score (0–100, centered at 50), internally decomposed into three components: asymmetry magnitude (how much anomalous activity), directional lean (which way the evidence points), and agreement (whether independent signal families corroborate each other). The score measures what people did. Not whether they were right. Not how much the price will move.
+Cascade maps information propagation through six epistemological states — from private cognition through institutional process, infrastructure response, capital commitment, narrative formation, and consensus integration. The output is not a single stage number but a state map: which stages show evidence, which are dark, and what the pattern of active stages reveals about the type of event driving the asymmetry. The cascade is a directed graph with typical ordering but variable paths. The path is diagnostic — a regulatory cascade looks structurally different from an insider trading cascade, even before the underlying information is known.
+Tempo contextualizes by establishing the historical rhythm of information flow for each security and evaluating current behavior against that baseline. The same event produces different significance depending on whether it represents routine behavior or a dramatic departure from pattern. Tempo applies cohort lenses — multiple simultaneous peer group comparisons that approximate how a company's distinct business units face risk and generate revenue. The same corporate announcement can be unremarkable through one lens and highly anomalous through another. The lens determines whether the behavior is normal or anomalous. Tempo also provides the temporal context for window estimation — approximately where in the 8-to-72-hour detection window the current event sits, and how much time likely remains.
+Conductor synthesizes the outputs of the other three services into operational postures based on rules the customer defines. Conductor is the only service that takes action. It produces four categories of response: Monitoring (day-to-day vigilance — baseline, elevated watch, cohort sympathy, tempo drift), Assessment (something is developing — research triggers, cascade mapping, contested conviction alerts, window estimation), Action (time-sensitive — threshold alerts, cascade acceleration, convergence alerts, trade execution, position adjustment, hedge triggers), and Meta (system health — collection failures, tempo recalibration, cohort review, data quality degradation). Wait is a Conductor output. It is a deliberate posture, not the absence of a decision.
+The interaction between Score and Cascade defines four operational quadrants: high conviction with early cascade (maximum window — the golden zone), high conviction with late cascade (closing window — crowded trade forming), low conviction with early cascade (watch list — ambiguous, monitor for escalation), and low conviction with late cascade (efficient — no detectable advantage). The typical traversal from maximum window to consensus takes 8 to 72 hours, varying by event type, security liquidity, and market conditions.
+The product targets sophisticated investment managers — RIAs, family offices, and small hedge funds managing $50M–500M — who already understand information asymmetry and want operational leverage in detecting it. The deliverable is not data, not predictions, not trade signals. It is a temporal position in the information cascade with a decay estimate.
+________________
+
+
+Open Questions
+Scoring Model
+Formula refinement. The multiplicative model (50 ± magnitude × lean × agreement) is a hypothesis, not a final specification. The specific functional form may require logistic scaling to prevent extreme scores, empirically-fitted component weighting, or nonlinear interaction terms. Backtesting against historical data will determine the final form.
+Non-directional magnitude at extreme levels. If a security shows massive Tempo deviation and dark pool volume anomaly but no directional lean (e.g., accumulation vs. distribution is indeterminate), should the customer-facing score remain near 50? The current model says yes — no lean means no movement from center. But a score of 50 on a security with 40+ magnitude feels misleading. This may require a secondary alert mechanism or a visible magnitude indicator alongside the score.
+Agreement calculation methodology. Should agreement weight all signal families equally, or should families with historically higher predictive accuracy receive more weight in the agreement calculation? Equal weighting is simpler and more defensible. Predictive weighting introduces a performance claim.
+Cascade Detection
+Stage boundary fuzziness. S2 (infrastructure response) and S3 (capital commitment) frequently co-occur. S1 (institutional process) can overlap with S0 (private cognition leaking). The system needs to handle simultaneous multi-stage evidence gracefully — probably as a probability distribution across stages rather than a single stage assignment.
+Cold-start per security class. How many historical cascade events are needed to build reliable stage detection models for a given security class? Large-cap tech will have abundant history quickly. Thinly-traded micro-caps may never accumulate enough events for reliable cascade inference. The product needs a confidence qualifier on cascade outputs, and customers need to understand which securities have high-confidence versus low-confidence cascade estimates.
+Cascade detection without Tempo. Can cascade stages be meaningfully inferred using only SignalDelta signals, before Tempo baselines exist? If yes, cascade detection can ship earlier in the build sequence. If no, cascade detection is blocked on Tempo — which extends the timeline.
+Tempo
+Time-series storage architecture. Per-security event histories across all tracked categories, across all cohort lenses, will grow substantially. TimescaleDB, dedicated time-series database, or partitioned PostgreSQL tables. This decision affects query performance, storage cost, and operational complexity.
+Structural break detection sensitivity. The threshold between "this is a new baseline" and "this is a temporary anomaly" requires tuning. Too sensitive: Tempo recalibrates on noise and loses valuable long-term baselines. Too insensitive: false positives from legitimate corporate changes (new CFO, merger, restructuring).
+Cohort lens weighting. When multiple lenses show different deviations for the same security, how should the aggregate cohort signal be calculated? Options include: report all lenses independently (most information, most complexity), weight by historical predictive accuracy per lens (introduces performance dependency), or weight by which lens shows the highest deviation (simplest, biases toward alarm). This decision affects both the scoring model and the customer experience.
+Cohort composition maintenance. Cohorts are not static. Companies change business models, enter new markets, exit old ones. Mergers create new entities. The cohort composition review process — how often, by what criteria, with what approval — is an operational question with IP implications.
+Conductor
+Alert fatigue calibration. Sixteen posture types across a growing universe of tracked securities risks overwhelming the customer with alerts. Threshold defaults, customer-configurable suppression rules, alert aggregation logic (grouping related alerts into a single notification), and digest frequency all require design and testing.
+Product tier packaging. Not all customers need all four services. Some want analytical outputs only (SignalDelta + Tempo). Some want alerts without trade execution (add Conductor without brokerage integration). Some want the full stack. The tier structure affects pricing, onboarding complexity, and infrastructure requirements.
+Execution reliability. Conductor's current trade execution has a 63.8% failure rate and 35% fill rate. This must be resolved before any customer relies on automated execution. The fix may be engineering (better error handling, retry logic, order type optimization) or architectural (different brokerage integration approach).
+Infrastructure
+Database location. Co-located with collectors (lowest write latency, simplest network topology) versus managed cloud (reliability, automated backups, scaling). Hybrid with read replicas adds operational complexity. The decision is blocked on the broader infrastructure plan (local hardware + AWS frontend).
+Batch versus streaming. The current cron-based architecture works for signals with hourly or daily update cycles. Options flow and dark pool prints update in real time and would benefit from near-real-time processing. Introducing a streaming layer (Kafka, Redis Streams) is a significant architectural change. Evaluate whether faster cron cycles (sub-minute) are sufficient before committing to streaming infrastructure.
+LLM cost scaling. Research report generation, crypto team analysis, and some signal extraction use Claude Haiku via API. Costs scale with security coverage and collection frequency. Local LLM deployment (already explored with Qwen on local GPU hardware) may be necessary for high-frequency tasks. The boundary between "must use frontier model" and "can use local model" needs to be defined per task.
+Market and Regulatory
+First customer acquisition. The target customer profile is defined (equity-focused RIA/family office, $50M–500M AUM). The sales process — identification, outreach, pitch, trial, conversion — is not. The minimum viable product for a credible first-customer trial needs to be specified.
+Pricing validation. $2,000–4,000/month per seat is the target based on alternative data market comparables. Willingness to pay at this level requires validation through customer conversations, not assumption.
+Regulatory positioning. Research/surveillance platform positioning (not investment advisor, not broker-dealer) requires formal legal review. Marketing materials, API documentation, and customer agreements must be reviewed for compliance before any customer-facing launch. The vocabulary discipline framework (conviction not strength, lean not signal, apparently informed not smart money) supports this positioning but does not substitute for legal counsel.
+Backtesting integrity. Any published accuracy metrics must account for survivorship bias (include delisted/bankrupt securities), look-ahead bias (only use data available at signal time), and selection bias (don't cherry-pick favorable periods). Honest accuracy numbers lower than optimized numbers are a credibility feature with sophisticated customers. This must be a policy, not a suggestion.
+________________
+
+
+Conclusion
+SignalDelta v2 is built on a simple observation and a sophisticated response.
+The observation: when people act on information the market hasn't priced in, their actions leave traces in public data. Options flow goes anomalous. Dark pool volume shifts. Filing patterns deviate. Insiders trade. Lobbyists spend. Blockchain wallets move. Each trace is individually ambiguous — indistinguishable from noise in isolation. Collectively, when multiple independent traces align, they become statistically measurable. That measurement is the IALD Score.
+The response: measuring that asymmetry exists is necessary but not sufficient. The sophisticated customer needs to know where in the information lifecycle they are — is this early-stage asymmetry with a wide window, or late-stage crowding with a closing window? That requires a second, independent measurement: the Cascade, mapping which layers of the market ecosystem show awareness. And it requires a third: Tempo, establishing whether the observed behavior is normal for this specific security through each of its relevant cohort lenses, and estimating how much time remains.
+These three measurements — conviction, propagation, and temporal context — are independently computed and independently valuable. Their interaction is where the product becomes something that does not currently exist in the market: a system that tells a sophisticated investment manager not just that smoke exists, but which rooms it has reached, how fast it's spreading, and approximately how many hours before everyone smells it.
+The v1 platform proves the foundational thesis: behavioral anomalies are detectable, aggregatable, and empirically correlated with subsequent price discovery events within an 8-to-72-hour window. v2 adds the structural and temporal dimensions that transform a score into operational intelligence.
+What remains is execution. The validation sequence is defined — three-component scoring, then signal-to-stage mapping, then Tempo baselines, then cascade detection, then window estimation. Each step validates the foundation for the next. The build priorities are phased across twenty weeks. The open questions are catalogued. The first paying customer is the forcing function that converts this document from a plan into a product.
+The honest assessment: SignalDelta v2 as described in this document is approximately 40% built, 30% designed, and 30% hypothetical. The 40% that exists works. The 30% that is designed is architecturally sound and testable. The 30% that is hypothetical — cascade temporal positioning, window estimation, Conductor posture optimization — will be validated or falsified by the data. That willingness to be falsified is what makes this a real product rather than a narrative.
+
+
+________________
+  
+
+
+
+________________
+Appendix 1: Vocabulary Discipline
+The following terminology is enforced in all customer-facing outputs — research reports, API documentation, dashboard labels, marketing materials, and verbal communication:
+We Say
+	We Do Not Say
+	Why
+	Behavioral conviction
+	Signal strength
+	Strength implies the move will be powerful. Conviction implies evidence is consistent.
+	Bullish/bearish lean
+	Buy/sell signal
+	A lean is an observation. A signal implies action recommendation.
+	Detected behavioral anomaly
+	Predicted outcome
+	Detected is past tense (we found something). Predicted is future tense (we claim to know what happens next).
+	Apparently informed participants
+	Smart money
+	Apparently informed is epistemologically honest. Smart money implies they are correct.
+	Asymmetrical positions may result in
+	The security will
+	May result in. Not will. The subject is the positions, not the security.
+	Conviction magnitude
+	Expected return
+	Magnitude measures signal agreement, not dollar outcomes.
+	
+
+
+
+
+
+Appendix 2: Backtesting
+SignalDelta v1 ships a production backtesting engine exposed via the API at GET /backtest/security/{ticker}. This system allows authenticated users to replay IALD BUY and BUY_NOW verdicts against historical price data for a single security, simulating trade execution with configurable parameters.
+
+
+1.1 Architecture
+The backtester is a FastAPI router (routers/backtest.py) that queries the existing research_reports and price_history tables. It does not maintain its own data pipeline; it operates entirely on data already collected by the signal and pricing infrastructure. The backtest runs as a synchronous database query followed by an in-memory event-driven state machine that processes BUY_OPPORTUNITY and EXIT_OPPORTUNITY events chronologically.
+
+
+1.2 Capabilities
+Entry Logic
+The system identifies all BUY and BUY_NOW verdicts from research_reports within the user-specified lookback period (1–365 days). For each verdict, it finds the closest available closing price at or before the verdict timestamp as the entry price. Trades are sized by a user-configurable investment_per_signal parameter ($100–$100,000), capped by available wallet balance.
+
+
+Exit Strategies
+Three configurable exit strategies are supported:
+
+
+Strategy
+	Behavior
+	Use Case
+	fixed (default)
+	Sell after a fixed time window (1–720 hours). Finds the first available price after the target exit time.
+	Baseline hypothesis testing: does a BUY signal predict positive movement within N hours?
+	upswing
+	Hold for a minimum of time_window_hours, then exit on the first profitable price. Maximum search window is 6x the minimum hold.
+	Tests whether IALD signals identify sustained upward movements where patience is rewarded.
+	sell_verdict
+	Hold until IALD issues a SELL or SELL_NOW verdict. No time limit.
+	Tests the full IALD signal lifecycle: entry on BUY, exit on SELL. Measures round-trip signal accuracy.
+	
+
+Position Management
+The engine implements a single-position state machine: CASH → BUY (spend wallet) → HOLDING → EXIT (sell, replenish wallet) → CASH. Only one position can be open at a time. If a BUY signal fires while already holding, it is skipped. Capital from profitable exits compounds into subsequent trades, meaning the wallet balance grows or shrinks across the backtest window.
+
+
+End-of-Period Handling
+If a position is still open when the backtest window ends, two behaviors are supported:
+* sell: Auto-liquidate at the latest available price. P&L is fully realized. The trade appears as an IMPLIED_SALE in the results.
+* hold: Keep the position open. Final capital includes unrealized gains/losses at mark-to-market. The trade appears as HOLDING with an open outcome, excluded from win/loss statistics.
+
+
+1.3 Output Schema
+The response includes per-trade detail and summary statistics:
+
+
+Output
+	Content
+	Per-Trade Detail
+	Report ID, verdict, IALD score, entry/exit prices and times, shares, capital before/after, P&L (% and $), outcome classification (win/loss/flat/open)
+	Summary Statistics
+	Total signals, trades with prices, win/loss/flat counts, win rate, initial and final capital, total ROI %, average P&L %, best/worst trade
+	Accounting Breakdown
+	Realized P&L, unrealized P&L, cash balance, position value, shares held, cost basis
+	Chart Data
+	Cumulative returns timeline (with verdicts annotated), full price history for the lookback period, all IALD verdicts (not just trades)
+	Usage Tracking
+	Remaining backtests in 24-hour window per subscription tier
+	
+
+1.4 Rate Limiting & Entitlements
+Backtest execution is rate-limited per user via the backtest_usage table and the entitlements service. Each tier has a configurable daily limit (with −1 representing unlimited). Usage is tracked per 24-hour rolling window. This prevents abuse of what is effectively a compute-intensive database operation.
+
+
+1.5 Known Limitations
+The current implementation has several deliberate constraints and known gaps that inform the v2 roadmap:
+
+
+Limitation
+	Impact
+	v2 Resolution
+	Single security only
+	Cannot test portfolio-level signal interactions or cross-asset convergence patterns
+	Multi-security and portfolio backtesting
+	Single position at a time
+	Misses overlapping signal opportunities; capital sits idle during holds
+	Concurrent position support with portfolio-level risk constraints
+	No transaction costs
+	Overstates returns, especially for high-frequency signal testing
+	Configurable commission, slippage, and spread models
+	Entry at last close before verdict
+	Real execution would have slippage; entry might be next-open, not prior-close
+	Configurable entry timing (prior close, next open, VWAP, limit order simulation)
+	No survivorship bias controls
+	Only tests securities that currently exist and are active
+	Include delisted/failed securities in test universe
+	No look-ahead bias detection
+	Relies on query logic to prevent it; no explicit audit trail
+	Formal point-in-time data reconstruction with audit logging
+	No benchmark comparison
+	Win rate alone is meaningless without market context
+	SPY/BTC benchmark overlay, risk-adjusted metrics (Sharpe, Sortino, max drawdown)
+	No statistical significance testing
+	Cannot distinguish signal from noise with small sample sizes
+	P-value calculation, bootstrap confidence intervals
+	No cascade-stage awareness
+	All BUY signals treated equally regardless of information propagation stage
+	Cascade-stage-filtered backtesting
+	Crypto price gaps
+	24/7 markets have no close; using close field may introduce artifacts for crypto
+	Asset-class-aware price resolution
+	
+
+2. Future State: v2 Backtesting & Validation Framework
+v2 backtesting evolves from a single-security replay tool into a comprehensive signal validation and portfolio simulation platform. The core thesis: backtesting must serve two distinct audiences with different needs — internal signal engineering (are our signals actually predictive?) and external customer validation (does this help my portfolio?).
+
+
+2.1 Internal Signal Validation
+These capabilities are not customer-facing. They exist to ensure IALD signals are honest and to prevent the platform from lying to itself.
+
+
+Walk-Forward Testing
+The current system tests signals against the full lookback window, which risks overfitting to the period. Walk-forward testing divides the dataset into sequential train/test windows: optimize signal weights on the training window, then measure out-of-sample performance on the next window. Repeat across the full history. This produces the only honest measure of signal predictive power.
+
+
+Point-in-Time Data Reconstruction
+Every backtest query must reconstruct exactly what the system knew at the moment each signal fired. This means: only signals that had been collected and scored by that timestamp, only price data available at that timestamp, and no database records created or modified after the signal time. This is the single most important anti-cheating mechanism in the entire platform. Without it, every performance number is suspect.
+
+
+Signal Attribution
+When a BUY signal leads to a profitable trade, which of the 104+ underlying signals actually contributed? The current system treats the IALD score as a black box. v2 decomposes each successful and failed prediction into its contributing signals, enabling: identification of which signals are carrying the model, detection of signals that add noise rather than value, and tier weight recalibration based on empirical performance rather than assumptions.
+
+
+Survivorship Bias Controls
+The securities table must retain delisted, bankrupt, and failed securities as inactive records with their full price and signal history preserved. Backtests must include these securities in the test universe. A signal system that only predicts winners among survivors is not predictive — it is selecting on the outcome variable.
+
+
+Statistical Rigor
+Every backtest result must include: p-values against a null hypothesis of random signal generation, bootstrap confidence intervals on win rate and ROI, minimum sample size warnings when trade count is too low for statistical significance, and explicit out-of-sample vs. in-sample labeling on all performance metrics.
+
+
+2.2 Customer-Facing Backtesting
+These capabilities extend the existing single-security backtester into a tool that institutional and retail customers can use to evaluate SignalDelta against their own investment process.
+
+
+Multi-Security Portfolio Backtesting
+Test IALD signals across a portfolio of securities simultaneously, with shared capital allocation, position limits, and sector exposure constraints. This answers the question institutional customers actually ask: how would IALD have affected my book?
+
+
+Benchmark Overlay
+Every backtest result should include performance of a buy-and-hold strategy for the same security and period, SPY (for equities) or BTC (for crypto) as a market benchmark, and risk-adjusted metrics: Sharpe ratio, Sortino ratio, maximum drawdown, Calmar ratio. Without benchmarks, a 15% return means nothing. Against SPY returning 22% in the same period, it means the signal destroyed value.
+
+
+Cascade-Stage Filtering
+v2 introduces cascade stage detection (the progression from insider awareness through smart money positioning to public knowledge). Backtesting must support filtering by cascade stage: test only signals that fired at Stage 2 (early detection) vs. Stage 5 (information already propagating publicly). This is the mechanism by which customers can tune their responsiveness — early signals have higher potential return but lower confidence; late signals have higher confidence but compressed window.
+
+
+Tempo Integration
+The Tempo service establishes baseline information flow rhythms per security. v2 backtesting should support Tempo-aware filtering: test only signals that fired when the security was exhibiting abnormal information velocity (z-score > N). This filters out signals that fire during normal market activity and isolates signals that fire during genuinely anomalous periods.
+
+
+Realistic Execution Modeling
+Replace the idealized entry/exit pricing with configurable execution models:
+* Entry timing: Prior close (current), next open, VWAP over first 30 minutes, limit order at signal price
+* Slippage model: Fixed basis points, volume-dependent, or historical spread-based
+* Commission: Per-share, per-trade, or percentage-based
+* Market impact: For larger position sizes, model price impact based on average daily volume
+
+
+Custom Signal Scoring
+Allow advanced users to modify signal weights within the backtest environment and re-run simulations. This enables customers to tune IALD to their own risk preferences without affecting the production scoring model. It also provides a natural upsell path: customers who discover that certain weight configurations outperform the defaults for their strategy will have strong incentive to maintain their subscription.
+3. Implementation Priority
+Sequenced by dependency chain and value delivery:
+
+
+Phase
+	Capability
+	Dependency
+	Value
+	Phase 1
+	Transaction cost modeling (commissions, slippage)
+	None — extends current router
+	Honest performance numbers; prerequisite for institutional credibility
+	Phase 1
+	Benchmark overlay (SPY/BTC comparison)
+	Price history for benchmark securities
+	Contextualizes every backtest result; table stakes for institutional customers
+	Phase 1
+	Statistical significance metrics
+	None — post-processing on existing results
+	Prevents customers from making decisions on statistically meaningless sample sizes
+	Phase 2
+	Point-in-time data reconstruction
+	Audit logging on all data mutations
+	Eliminates look-ahead bias; the credibility foundation for everything else
+	Phase 2
+	Walk-forward testing (internal)
+	Point-in-time reconstruction
+	Honest signal validation; prevents self-deception
+	Phase 2
+	Signal attribution
+	Per-signal scoring decomposition in research.py
+	Identifies which signals matter; enables weight optimization
+	Phase 3
+	Multi-security portfolio backtesting
+	Capital allocation engine
+	Answers the institutional question: how does this affect my book?
+	Phase 3
+	Cascade-stage filtering
+	Cascade detection (Layer 3 of v2 architecture)
+	Enables time-sensitivity tuning; differentiator vs. competitors
+	Phase 3
+	Tempo-aware filtering
+	Tempo service operational
+	Filters noise; isolates genuinely anomalous signal periods
+	Phase 4
+	Custom signal weighting
+	Signal attribution + multi-security
+	Power-user feature; natural upsell mechanism
+	Phase 4
+	Survivorship bias controls
+	Inactive securities retention policy
+	Intellectual honesty at scale; regulatory defensibility
+	
+
+
+
+4. Ethical & Regulatory Guardrails
+Backtesting is the area of the platform with the highest risk of self-deception and regulatory exposure. The following principles are non-negotiable:
+
+
+* No hypothetical performance claims. Backtest results are explicitly labeled as simulations. The system never generates language like “you would have made X%.” Results show detection capability, not investment returns.
+* All metrics include confidence intervals. A 67% win rate on 12 trades is statistically meaningless. The system must communicate uncertainty honestly.
+* Out-of-sample labeling is mandatory. Any metric that was computed on data used to calibrate the model is labeled IN-SAMPLE in the output. Only walk-forward results are labeled VALIDATED.
+* Transaction costs default to ON. The zero-cost backtest is available but clearly labeled as idealized. Default results include realistic friction.
+* SEC/FINRA compliance framing. SignalDelta provides research and surveillance data. Backtest results demonstrate detection accuracy, not investment performance. This distinction must be maintained in all customer-facing output, documentation, and marketing materials.
+
+
+
+
+
+
+
+
+DRAFT — February 2026 — Revision 0.2 — SignalDelta • signaldelta.io
+Classification: CONFIDENTIAL

@@ -1,0 +1,222 @@
+﻿SignalDelta Collector ↔ Signal Gap Reconciliation
+February 8, 2026
+________________
+
+
+The Core Finding
+140+ collectors exist. 80 signals cataloged. Only ~12 signals are active in the scorer.
+The bottleneck is not data collection. It's the integration pipeline: collector → signal table → scorer → API. Collectors are 3–5x ahead of signal integration.
+________________
+
+
+Signals with Existing Collectors Incorrectly Marked "Not Built"
+These signals were cataloged as unbuilt but have collectors already written. The actual gap is scorer integration, not data collection. Engineering effort drops from "weeks" to "days."
+Signal
+	Accuracy
+	Catalog Status
+	Collector(s)
+	Actual Gap
+	S059 Serial Deployer
+	75–85%
+	Not built
+	factory_detector.py, contract_deployer_tracker.py
+	Scorer entry + signal pipeline
+	S062 Unverified Contract
+	60–70%
+	Not built
+	unverified_deployer_analyzer.py
+	Scorer entry
+	S067 LP Burn
+	65–75%
+	Not built
+	crypto_lp_burn_detector.py
+	Scorer entry
+	S030 Auditor Change
+	65–75%
+	Not built
+	auditor_change.py
+	Scorer entry + signal pipeline
+	S031 Material Weakness
+	55–65%
+	Not built
+	material_weakness.py, material_weaknesses_collector.py
+	Scorer entry
+	S048 CEX Listing Front-Run
+	60–70%
+	Not built
+	listing_frontrun.py, cex_listings_collector.py
+	Scorer entry + signal pipeline
+	S076 Wash Trading
+	55–65%
+	Not built
+	nft_wash_trade.py
+	Adaptation from NFT to general DEX
+	S053 Bridge Monitor
+	50–60%
+	Not built
+	bridge_monitor.py
+	Scorer entry
+	S050 Domain Anomalies
+	55–65%
+	Not built
+	domain_monitor.py
+	Scorer entry
+	S043 GitHub Commit
+	55–65%
+	Not built
+	github_anomaly.py, github_enhanced.py
+	Scorer entry
+	S026 Index Inclusion
+	55–65%
+	Not built
+	index_frontrun.py, index_constituents.py
+	Scorer entry
+	S028 Buyback Execution
+	50–58%
+	Not built
+	buyback_pattern.py
+	Scorer entry (Tempo context)
+	S034 Customer Concentration
+	45–55%
+	Not built
+	concentration_disclosure.py, concentration_tracker.py
+	Scorer entry (Tempo context)
+	13 signals with collectors already written but not integrated into the scorer. Combined estimated accuracy improvement if activated: substantial — includes 3 of the top 10 accuracy signals (S059, S062, S067).
+________________
+
+
+Revised Priority Actions (Collector-Aware)
+Tier 0: Wire Existing Collectors to Scorer (days, not weeks)
+Action
+	Signal
+	Accuracy
+	Effort
+	Add scorer entry for unverified_deployer_analyzer output
+	S062
+	60–70%
+	Hours
+	Add scorer entry for crypto_lp_burn_detector output
+	S067
+	65–75%
+	Hours
+	Add scorer entry for factory_detector output
+	S059
+	75–85%
+	1–2 days
+	Add scorer entry for auditor_change output
+	S030
+	65–75%
+	1 day
+	Add scorer entry for domain_monitor output
+	S050
+	55–65%
+	Hours
+	Add scorer entry for github_anomaly output
+	S043
+	55–65%
+	Hours
+	Fix adr_spread → add missing scorer entry
+	S037
+	55–65%
+	30 min
+	Tier 1: Fix Broken Collectors (debugging, not building)
+Action
+	Signal
+	Accuracy
+	Effort
+	Debug exchange_flow.py / exchange_inflow.py
+	S047
+	65–75%
+	1–2 days
+	Fix Polygon options pipeline
+	S021/S022
+	55–65%
+	1–2 days
+	Tier 2: Acquire Keys to Activate Waiting Collectors
+Key
+	Collectors Ready
+	Signals Unblocked
+	Families
+	FINRA API
+	finra_data.py, dark_pool_clustering.py, 6× short collectors
+	S005, S008, S035 + variants
+	F05, F06
+	IBKR API
+	borrow_rate.py
+	S035
+	F06
+	Tier 3: Build New (no collector exists)
+Signal
+	Accuracy
+	What's Needed
+	Priority
+	S071 Fraud Registry
+	70–80%
+	OSINT scraper + DB schema
+	High — prerequisite for S059
+	S073 Proxy Admin
+	60–70%
+	EIP-1967 storage slot reader
+	Medium
+	S079 Supply Inflation
+	75–85%
+	totalSupply() polling
+	High — simplest S-tier
+	S055 Pump Group
+	65–75%
+	Coordinated accumulation detector
+	Medium
+	S080 Cross-DEX Drain
+	65–75%
+	Multi-DEX TVL correlation
+	Medium
+	________________
+
+
+"Empty" Families That Actually Have Collectors
+Family
+	Catalog Status
+	Collectors Found
+	Revised Status
+	F13 Regulatory & Macro
+	"COMPLETELY EMPTY"
+	cbdc_tracker_collector, cbdc_event_seeder, sovereign_btc_treasury, sovereign_currency_listings, sovereign_currency_officials
+	Has data collectors, needs signal framework
+	F20 Crypto Exchange Micro
+	"COMPLETELY EMPTY"
+	orderbook_imbalance, coinglass_derivatives, staking_metrics
+	Has data collectors, needs signal framework
+	F19 Credit & Fixed Income
+	"One signal, not built"
+	convertible_spread.py
+	Collector exists for S038
+	________________
+
+
+Collector-to-Signal Pipeline Architecture
+COLLECTOR LAYER (140+ files)     SIGNAL LAYER (80 cataloged)     SCORER LAYER
+        │                                │                            │
+   Writes to DB                    Reads from DB                 Reads signals
+   (raw data tables)               (signal tables)              (produces scores)
+        │                                │                            │
+        ▼                                ▼                            ▼
+  ┌──────────┐    ← GAP IS HERE →  ┌──────────┐    ← AND HERE → ┌──────────┐
+  │ Raw data │                      │ Signal   │                  │ Scorer   │
+  │ tables   │                      │ entries  │                  │ weights  │
+  │ (full)   │                      │ (sparse) │                  │ (12 of   │
+  │          │                      │          │                  │  80)     │
+  └──────────┘                      └──────────┘                  └──────────┘
+The two gaps are both integration gaps, not capability gaps. The data exists. The signals are designed. The wiring between layers is incomplete.
+________________
+
+
+Impact on API v2
+The collector layer is not part of the API server. Collectors run as scheduled background tasks (currently via run_all.py cron, v2 via ARQ scheduled tasks). The API serves the output of collectors via the signal and scorer layers.
+However, the API v2 architecture needs to account for:
+1. Collector health monitoring — the /status endpoint should report collector last-run times and error rates
+2. Manual collector triggers — admin endpoints to force-run specific collectors
+3. Collector output as API data — raw collector data (whale transactions, insider trades) is valuable API content beyond just the scored signals
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

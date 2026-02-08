@@ -1,0 +1,472 @@
+﻿SignalDelta Family Coverage Gap Analysis
+All 20 Families × 80 Signals
+Version 1.0 | February 8, 2026
+________________
+
+
+Coverage Heat Map
+Family
+	Signals
+	Active
+	Partial/Blocked
+	Unbuilt
+	Best Accuracy
+	Health
+	F01: Corporate Insider
+	6
+	3
+	2
+	1
+	60–70%
+	🟢 Strong
+	F02: Governance & Political
+	3
+	2
+	1
+	0
+	65–75%
+	🟢 Strong
+	F03: Litigation & Enforcement
+	1 (+10 scorer)
+	0*
+	0
+	1
+	65–75%
+	🟡 Misleading
+	F04: Options Market Structure
+	6
+	3
+	2 blocked
+	1
+	55–65%
+	🟡 Data-starved
+	F05: Dark Pool & Block Trade
+	1
+	0
+	1 blocked
+	0
+	50–60%
+	🔴 Dead
+	F06: Short Selling & Borrow
+	3
+	1
+	2 blocked
+	0
+	60–70%
+	🔴 Blocked
+	F07: Analyst & Research
+	1
+	1
+	0
+	0
+	50–60%
+	🟡 Thin
+	F08: Disclosure & Filing
+	4
+	0
+	1
+	3
+	60–70%
+	🔴 Empty
+	F09: Narrative & Media
+	1
+	0
+	1
+	0
+	45–55%
+	🔴 Weak
+	F10: Social & Influencer
+	2
+	0
+	2
+	0
+	55–65%
+	🔴 Weak
+	F11: Alternative Data
+	0 (+7 scorer)
+	0
+	0
+	0
+	N/A
+	⚫ Orphaned
+	F12: Calendar & Event
+	4
+	1
+	2
+	1
+	55–65%
+	🟡 Moderate
+	F13: Regulatory & Macro
+	0
+	0
+	0
+	0
+	N/A
+	⚫ Empty
+	F14: Crypto On-Chain Flow
+	13
+	0
+	3
+	10
+	65–75%
+	🔴 Broken
+	F15: Crypto Protocol Integrity
+	12
+	3
+	1
+	8
+	75–85%
+	🟡 Lopsided
+	F16: Crypto Social Manipulation
+	3
+	0
+	1
+	2
+	65–75%
+	🔴 Empty
+	F17: Prediction Markets
+	3
+	2
+	1
+	0
+	50–60%
+	🟡 Functional
+	F18: Cross-Asset Correlation
+	2 (+1 scorer)
+	2
+	0
+	0
+	55–65%
+	🟡 Thin (fixable)
+	F19: Credit & Fixed Income
+	1
+	0
+	0
+	1
+	60–70%
+	⚫ Empty
+	F20: Crypto Exchange Micro
+	0
+	0
+	0
+	0
+	N/A
+	⚫ Empty
+	Legend: 🟢 Functional with data flowing | 🟡 Partially functional or thin | 🔴 Blocked/broken/weak | ⚫ Nothing exists
+________________
+
+
+Tier 1: Strong Families (production-grade, data flowing)
+F01: Corporate Insider Behavior — 🟢 STRONGEST FAMILY
+Coverage: 6 signals, 3 active, 12+ scorer sub-signals Crown jewel: S006 (Form 4 Timing, 60–70%) with 1,761 insider trades, 1,738 timing analysis rows, 24 cluster signals. This is the most data-rich signal in the entire system.
+Strengths:
+* Deepest data pipeline in the system (Form 4 from SEC EDGAR)
+* Cluster detection (≥3 insiders, same direction, within 5 days) is meaningfully more predictive than individual trades
+* CEO/CFO trades are the most predictive sub-type
+* S032 (C-Suite Departure) adds governance-layer evidence within the same institutional pathway
+Gaps:
+* S027 (Dividend vs. Insider cross-reference) needs a temporal join between existing Form 4 data and FMP dividend calendar — moderate effort, moderate value
+* S023 (13F Concentration) is correctly deprioritized as Tempo context, not acute scoring
+* No real-time insider filing detection — currently batch-processed. Real-time Form 4 parsing would reduce detection latency from hours to minutes.
+Verdict: Operational. Focus on latency reduction (real-time Form 4) and cross-reference enrichment (S027), not new signal development.
+________________
+
+
+F02: Governance & Political Intelligence — 🟢 STRONG
+Coverage: 3 signals, 2 active, 11+ scorer sub-signals Crown jewel: S014 (Congressional Trading, 60–75%) with the S-tier committee chair sub-signal (1.65x) and the bipartisan cluster variant that needs instance threshold relaxation.
+Strengths:
+* Congressional trading is a politically unique data source with strong academic validation (6% annual outperformance)
+* Board resignation clustering (S033) at A-tier (1.40x) is the highest-weighted governance signal
+* The board_official_network sub-signal bridges F01 and F02 (directors who sit on both corporate boards and government advisory bodies)
+Gaps:
+* S015 (Lobbying) is partial and non-directional — long-lead Tempo signal, not acute
+* Congressional bipartisan cluster (P-tier, 0.65x) needs fast-tracking despite low instance count — conceptually the strongest governance signal
+* No state-level political intelligence (governor, state attorney general — these regulate industries at state level)
+Verdict: Operational. The bipartisan cluster promotion is the highest-ROI enhancement.
+________________
+
+
+Tier 2: Partially Functional Families (data exists but gaps limit effectiveness)
+F03: Litigation & Enforcement — 🟡 MISLEADING
+Coverage: 1 brainstorm signal (S030, unbuilt), but 10 scorer entries (sec_investigation, executive_indictment, new_class_action, etc.) Paradox: The scorer has more signals in F03 than almost any other family, but the brainstorm only identified one (S030 Auditor Change). This suggests the scorer's litigation signals were defined independently of the brainstorm, possibly from a different signal generation process.
+Strengths:
+* Scorer entries are well-tiered: A-tier (executive_indictment 1.55x, sec_investigation 1.45x), B-tier (new_class_action, whistleblower_claim), C-tier (regulatory_fine), D-tier (settlement_announced)
+* The litigation correlation cluster has 6 signals — one of the larger clusters
+Gaps:
+* S030 (Auditor Change/Going Concern) at 65–75% accuracy is not built. This is the highest-confidence predictive signal in the family — the scorer's existing signals (SEC investigation, class action) are reactive (fire after the event is public). S030 is prospective (auditor leaves before problems are public).
+* No data volume assessment possible — the scorer entries exist but their collection status isn't documented in SIGNAL_COVERAGE.md beyond the sec_filings table at D-tier.
+* The family has a reactive/prospective imbalance: 9 signals detect events that are already public (litigation filings, SEC actions); only S030 detects a precursor to those events.
+Verdict: Structurally rich but strategically inverted. Building S030 would flip the family from reactive to predictive. The existing scorer signals provide confirmation after the fact; S030 provides the advance warning.
+________________
+
+
+F04: Options Market Structure — 🟡 DATA-STARVED
+Coverage: 6 signals, 3 active but sparse Bottleneck: Polygon options data pipeline — the same blocker affects S003 (102 rows only), S021 (empty), and S022 (empty).
+Strengths:
+* Conceptually the strongest family for short-term IALD detection. Options are the instrument of choice for informed traders because of leverage, anonymity, and limited downside.
+* S003 (Volume/OI Spike) and S004 (Sweep Aggression) are both active and academically validated
+* The magnitude + direction decomposition is correct: S021 (term structure) provides Magnitude, S022 (skew) provides Lean
+Gaps:
+* Options surface data (IV term structure, skew) is completely missing — iv_surfaces table is empty
+* 102 rows in options_volume_spike is dangerously thin for a family that should be generating hundreds of signals per week
+* Polygon API key exists but the collection pipeline for IV surfaces isn't populating
+* S025 (ETF Creation/Redemption) at 40–50% should be formally Tier X
+Verdict: The family with the widest gap between potential and actual contribution. Fixing the Polygon options data pipeline is the single highest-impact equities infrastructure fix. It would unblock 4+ signals and take F04 from "thin and sparse" to "the core short-term detection family."
+________________
+
+
+F12: Calendar & Event Structure — 🟡 MODERATE
+Coverage: 4 signals, 1 active, 6 scorer entries Anchor: pre_earnings_activity at B-tier (1.30x) is the functional core. S040 (Lock-Up) is active at D-tier.
+Strengths:
+* Calendar events are known — the dates are public. The IALD value is in detecting positioning around those dates that reveals informed expectations about unknown outcomes.
+* Earnings, lock-up, and token unlock calendars are all partially functional
+* The Tempo integration point is natural: calendar events define the temporal context that Tempo baselines are calibrated against
+Gaps:
+* S026 (Index Inclusion Front-Running) — not built, 55–65% accuracy, but requires an index reconstitution modeler that's a meaningful research project
+* S029 (Earnings Date Change) — partial, better as Tempo context than scoring input
+* S054 (Token Unlock) — partial, needs TokenUnlocks.app integration and funding rate data
+* No unified event calendar that aggregates all known catalyst dates across earnings, lock-ups, FDA dates, index reconstitution, etc. This shared calendar infrastructure would serve the entire family.
+Verdict: Functional but fragmented. A unified event calendar would provide the Tempo backbone that multiple signals depend on.
+________________
+
+
+F15: Crypto Protocol & Contract Integrity — 🟡 LOPSIDED
+Coverage: 12 signals (most of any family), 3 active, 8 unbuilt Crown jewel: S044 (Honeypot, 70–80%, 479 signals) — the only production-grade crypto signal. Highest potential: S059 (Serial Deployer, 75–85%) and S079 (Supply Inflation, 75–85%) — the two highest-accuracy unbuilt signals in the entire catalog.
+Strengths:
+* More signals mapped than any other family
+* Contains 3 of the top 5 accuracy signals in the crypto catalog (S044, S059, S079)
+* The three-check first-pass filter (S062 verified? → S044 clean? → S067 burned?) is trivial to build
+* The mint function threat chain (S044 capability → S073 access → S079 execution) covers the full lifecycle
+Gaps:
+* Only 3 of 12 signals are active. The family is 75% unbuilt.
+* S059 (Serial Deployer, 75–85%) and S079 (Supply Inflation, 75–85%) are the most embarrassing gaps in the crypto pipeline — both are S-tier per Collector_Plan, both are deterministic, and S079 is literally one on-chain function call.
+* S071 (Fraud Registry) is a prerequisite for S059 — must be built first
+* S073 (Proxy Admin) fills the gap S044 can't see (future rug capability via upgradeable contracts)
+Verdict: The family with the highest ceiling and the widest gap between potential and actual. Building 3 signals (S062, S067, S079) — all trivial — would double the active signal count. Building 2 more (S071, S059) — moderate to complex — would activate the highest-accuracy detection in the crypto domain.
+________________
+
+
+F17: Prediction Markets — 🟡 FUNCTIONAL
+Coverage: 3 signals, 2 active Anchor: S002 (Probability Divergence) via Kalshi
+Strengths: Operational, data flowing, integrated into scorer Gaps: S001 (New Account Concentration) wallet-age tracking missing; S010 (Whisper Divergence) is weakest signal in the batch at 50–58% Verdict: Working. Lowest priority for investment. Marginal improvements available but not impactful.
+________________
+
+
+F18: Cross-Asset Correlation — 🟡 THIN BUT FIXABLE
+Coverage: 2 signals, both active, but scorer integration is broken/wrong Quick wins: Add adr_spread scorer entry (S037, 5 signals generating with no scorer). Reclassify cohort_performance (S039) from alternative to cross_asset cluster.
+Strengths: Both signals are producing data. The concepts are well-validated (ADR parity, cohort decoherence). Gaps: Scorer doesn't consume ADR data. Cohort performance uses crude sector ETF comparison instead of Tempo multi-lens baselines. Verdict: Two 30-minute code changes would take F18 from "2 P-tier signals" to "3–4 C-tier signals." Highest ROI-per-effort of any family fix.
+________________
+
+
+Tier 3: Blocked/Broken Families (data pipeline failures)
+F05: Dark Pool & Block Trade — 🔴 DEAD
+Coverage: 1 signal (S005), 5 scorer sub-signals, zero data Blocker: Missing FINRA API key. This single API key blocks 5 dark pool signals and 9 short interest signals (F06). Combined, it blocks 14 signals across two families. Impact: F05 provides CT-09 (Activist Accumulation) and CT-03 (Deal Leakage) evidence. Without F05, these cascade types cannot be detected. Verdict: Acquire FINRA API key. This is the #1 equities infrastructure blocker.
+________________
+
+
+F06: Short Selling & Borrow Infrastructure — 🔴 BLOCKED
+Coverage: 3 signals, 1 active (FTD only), 2 blocked Blockers: FINRA API key (S008 Short Interest), IBKR API key (S035 Borrow Rate) Impact: S035 (Borrow Rate, 60–70%) is the strongest signal in F06 and provides real-time S2 (Infrastructure Response) evidence. Without it, the only F06 data is delayed FTD reports from the SEC. Verdict: FINRA API is shared with F05 (one key unlocks both families). IBKR API is separate. Both should be acquired. Combined they unlock the strongest bearish detection family in equities.
+________________
+
+
+F08: Disclosure & Filing Tempo — 🔴 EMPTY IN PRACTICE
+Coverage: 4 signals, 0 active Issue: Not a data blocker — it's a priority issue. All four signals (S024 Activist Filing, S028 Buyback, S031 Material Weakness, S034 Customer Concentration) are either infrequent events, quarterly cadence, or require NLP on SEC filings. None has been built. The exception: S024 (13D/13G Activist Filing) at 60–70% accuracy is the most actionable signal in the family, but events are rare (~20–40 per year across the full equity universe). Verdict: Deprioritize as a family. Individual signals should be built as byproducts of broader SEC filing infrastructure (S024 piggybacks on EDGAR pipeline, S031 piggybacks on 10-K parsing).
+________________
+
+
+F09: Narrative & Media Velocity — 🔴 WEAK
+Coverage: 1 signal (S012), 6 sub-signals, all E-tier (0.70–0.80x) Issue: NewsAPI data exists (21,167 items) but the velocity metric (rate-of-change of coverage) is underdeveloped. All sub-signals are E-tier, meaning the family contributes almost nothing to scoring. Strategic importance: Despite weak individual accuracy, F09 is diagnostically critical for cascade chain type classification. CT-04 (Media Leak) is distinguished from CT-02 (Insider) by narrative preceding price action. Without F09, the cascade detector can't make this distinction. Verdict: The family's value is in cascade typing, not scoring. Develop the temporal ordering metric (did narrative precede or follow price action?) rather than trying to improve the accuracy of narrative velocity as a standalone signal.
+________________
+
+
+F10: Social & Influencer Coordination — 🔴 WEAK
+Coverage: 2 signals, both partial Issue: Wallet-to-identity linking is the bottleneck. Both S011 (equities) and S049 (crypto) depend on knowing which social media accounts control which wallets/portfolios. Verdict: Build a 50-influencer curated wallet database. This single data asset serves both signals and provides the ground truth for the entire F10 family.
+________________
+
+
+F14: Crypto On-Chain Capital Flow — 🔴 BROKEN
+Coverage: 13 signals (second-most of any family), 0 active, 3 partial/broken, 10 unbuilt Paradox: The family with the most signals is also the least functional. 23,002 raw whale_transactions exist but the signal generation pipeline is broken. Blockers: S018/S047 exchange_flow collector errors are the immediate blocker. Entity resolution (S046) is the strategic blocker — without it, wallet-level analysis can't be aggregated to entity-level. Verdict: Fix the exchange_flow collector first (immediate, highest-impact crypto fix). Then build entity resolution (S046) as the F14 family foundation. Everything else in F14 depends on these two.
+________________
+
+
+F16: Crypto Social & Community Manipulation — 🔴 EMPTY IN PRACTICE
+Coverage: 3 signals, 0 active, 1 partial Impact: Without F16, the cascade detector cannot distinguish CT-05 (Rug Pull, team-driven) from CT-10 (Pump-and-Dump, community-driven). Both appear as "crypto fraud" without the social layer that differentiates them. Verdict: S041 (Telegram/Discord velocity) is the entry point. Admin activity tracking is the key differentiator. Build the admin silence detector as the minimum viable F16 signal.
+________________
+
+
+Tier 4: Empty Families (nothing exists)
+F11: Alternative Data & Behavioral — ⚫ ORPHANED
+Coverage: 0 brainstorm signals, but 7 scorer entries (web_traffic_anomaly, glassdoor_sentiment, corporate_jet_tracking, app_download_surge, credit_card_spend_velocity, wikipedia_controversy, cohort_performance) Paradox: The scorer has 7 entries for signals that were never formally brainstormed. These appear to have been defined during scorer development without corresponding brainstorm analysis. All are D/E/P/X tier — none contributes meaningfully to scoring. Assessment: This family was speculative from the start. The signals represent "wouldn't it be cool if" ideas rather than evidence-based IALD detection. cohort_performance should be reclassified to F18 (where it belongs). The remaining 6 signals can stay as experimental entries but shouldn't receive development investment. Verdict: Reclassify cohort_performance to F18. Leave the rest as-is. No new development.
+________________
+
+
+F13: Regulatory & Macro Environment — ⚫ COMPLETELY EMPTY
+Coverage: 0 signals, 0 scorer entries Concept: Macro-level regulatory signals — new legislation, executive orders, central bank policy changes — that create information asymmetry between those with advance regulatory knowledge and the general market. Why it's empty: The brainstorm focused on company-specific signals (insider trading, options flow) and project-specific signals (honeypot, rug pull). Macro-level regulatory intelligence was out of scope. What would fill it:
+* Executive order / bill tracker with pre-announcement positioning detection
+* Fed meeting positioning analysis (funding rate, options skew changes in 48h pre-FOMC)
+* Regulatory comment period analysis (who comments on proposed rules, and do they trade accordingly?)
+* International regulatory divergence (crypto regulations vary by jurisdiction — regulatory arbitrage positioning) Assessment: These are legitimate IALD signals but represent a different level of analysis than the current company/project focus. Building F13 is a strategic expansion of scope, not a gap fill within current scope. Verdict: Formally defer. F13 represents a v3+ expansion, not a v2 gap. Don't invest until the company-level and project-level families are operational.
+________________
+
+
+F19: Credit & Fixed Income Signals — ⚫ ONE SIGNAL, UNBUILT
+Coverage: S038 (Convertible Bond vs. Equity, 60–70%) — not built Impact: Without F19, CT-07 (Credit Distress) cannot be detected via cross-asset credit-equity lead-lag. This is the defining signal for CT-07 and provides genuinely independent evidence from a different institutional pathway than any equities family. Why it matters: Credit markets lead equity markets by 1–3 days for negative information (Acharya and Johnson 2007). This is one of the most robust findings in cross-asset research. Having no credit data means the system is blind to the most reliable early warning channel for financial distress. What would fill it:
+* TRACE convertible bond data (FINRA — same API key as F05/F06)
+* CDS spread data (requires data vendor)
+* Corporate bond spread data (TRACE again)
+* Repo rate anomalies (Federal Reserve data) Verdict: Medium-term strategic priority. FINRA API key unlocks three families (F05, F06, F19) with TRACE data. This is another reason the FINRA key is the #1 equities infrastructure acquisition.
+________________
+
+
+F20: Crypto Exchange & Market Microstructure — ⚫ COMPLETELY EMPTY
+Coverage: 0 signals, 0 scorer entries Concept: Exchange-level microstructure signals — order book depth asymmetry, funding rate divergence across exchanges, liquidation cascade detection, exchange reserve changes. Why it's empty: The brainstorm treated exchange-level data as input to on-chain signals (F14) rather than as a separate analytical layer. Funding rates were mentioned in S054 (Token Unlock) but not formalized as an F20 signal. What would fill it:
+* Cross-exchange funding rate divergence (Binance vs. Bybit vs. dYdX)
+* Order book depth asymmetry (bid vs. ask depth changes)
+* Liquidation cascade detection (large liquidation events creating forced selling)
+* Exchange reserve changes (exchange-level inflow/outflow aggregation, different from F14's wallet-level view)
+* Open interest divergence (perp OI vs. spot volume) Assessment: F20 signals would be the crypto equivalent of F04 (Options Market Structure) for equities — market microstructure evidence that reveals informed positioning. The data is available from exchange APIs (Binance, Bybit, dYdX). Verdict: Build after F14 and F15 are functional. F20 represents the next layer of crypto market intelligence beyond on-chain and protocol analysis.
+________________
+
+
+Strategic Gap Priorities
+Priority 1: Infrastructure Blockers (unlock multiple families)
+Action
+	Effort
+	Unlocks
+	Families
+	Acquire FINRA API key
+	Low (procurement)
+	14+ signals
+	F05, F06, F19
+	Fix exchange_flow collector
+	Medium (debugging)
+	2+ signals
+	F14
+	Fix Polygon options pipeline
+	Medium (debugging)
+	4+ signals
+	F04
+	Acquire IBKR API or Ortex
+	Low (procurement)
+	1 signal (S035, 60–70%)
+	F06
+	Priority 2: Quick Wins (< 1 day each, high impact)
+Action
+	Effort
+	Impact
+	Add adr_spread scorer entry
+	30 min
+	Activates F18
+	Reclassify cohort_performance to cross_asset
+	30 min
+	Strengthens F18
+	Build S062 (Unverified Contract check)
+	2 hours
+	F15 first-pass filter
+	Build S067 (LP Burn check)
+	2 hours
+	F15 first-pass filter
+	Build S079 (Supply Inflation)
+	4 hours
+	S-tier signal, F15
+	Priority 3: Medium-Term Builds (1–4 weeks each)
+Action
+	Effort
+	Impact
+	Build S030 (Auditor Change parser)
+	1 week
+	Flips F03 from reactive to predictive
+	Build S071 (Fraud Registry)
+	2 weeks
+	Prerequisite for S059
+	Build S059 (Serial Deployer)
+	3 weeks
+	Highest-accuracy crypto detection
+	Build S073 (Proxy Admin)
+	1 week
+	Completes mint threat chain
+	Build F09 temporal ordering
+	2 weeks
+	Enables CT-04 vs. CT-02 discrimination
+	Priority 4: Strategic Expansions (1–3 months)
+Action
+	Effort
+	Impact
+	Build F19 starting with TRACE data
+	2 months
+	Activates CT-07 credit distress detection
+	Build F20 starting with funding rates
+	1 month
+	Crypto market microstructure layer
+	Build Tempo multi-lens baselines
+	3 months
+	Upgrades F18 S039 from C to B tier
+	Build unified event calendar
+	1 month
+	F12 infrastructure backbone
+	________________
+
+
+Family Coverage by Cascade Chain Type
+The 10 chain types require specific family combinations. This matrix shows which chain types are detectable with current coverage:
+Chain Type
+	Required Families
+	Active Coverage
+	Detectable?
+	CT-01: Regulatory Cascade
+	F02, F03, F09
+	F02 ✓, F03 partial, F09 weak
+	🟡 Partial
+	CT-02: Insider Trading
+	F01, F04, F05
+	F01 ✓, F04 thin, F05 dead
+	🟡 Partial
+	CT-03: Deal Leakage
+	F04, F05, F08
+	F04 thin, F05 dead, F08 empty
+	🔴 No
+	CT-04: Media Leak
+	F09, F04, F01
+	F09 weak, F04 thin, F01 ✓
+	🟡 Barely
+	CT-05: Crypto Rug Pull
+	F14, F15, F16
+	F14 broken, F15 partial, F16 empty
+	🟡 Partial (S044 only)
+	CT-06: Earnings Anticipation
+	F04, F07, F12
+	F04 thin, F07 active, F12 moderate
+	🟡 Partial
+	CT-07: Credit Distress
+	F06, F19, F03
+	F06 blocked, F19 empty, F03 partial
+	🔴 No
+	CT-08: Geopolitical
+	F02, F13, F18
+	F02 ✓, F13 empty, F18 thin
+	🔴 No
+	CT-09: Activist Accumulation
+	F05, F08, F04
+	F05 dead, F08 empty, F04 thin
+	🔴 No
+	CT-10: Pump-and-Dump
+	F16, F14, F10
+	F16 empty, F14 broken, F10 weak
+	🔴 No
+	Detectable chain types: 0 fully, 5 partially, 5 not at all.
+This is the starkest finding. The cascade detection system — the v2 architectural centerpiece — has zero fully detectable chain types. CT-02 (Insider) comes closest because F01 is strong, but F05 (Dark Pool) is dead and F04 (Options) is thin. CT-05 (Rug Pull) is partially detectable through S044 alone but missing the F14 and F16 evidence that would confirm the cascade.
+The FINRA API key alone would move CT-02, CT-03, CT-07, and CT-09 from "No" or "Partial" toward detectability by activating F05 and F06. This reinforces FINRA as the #1 infrastructure priority.
+________________
+
+
+Recommendations
+1. Acquire the FINRA API key. It unlocks 3 families, 14+ signals, and moves 4 cascade types toward detectability. No other single action has comparable cross-system impact.
+2. Execute the 5 crypto quick wins (S062, S067, S079, plus scorer fixes for F18). These are collectively less than 1 day of work and would activate 3+ signals including an S-tier crypto signal.
+3. Fix the two broken pipelines (exchange_flow collector, Polygon options data). These are debugging tasks, not new builds, and unblock the two most important non-FINRA data flows.
+4. Build S030 (Auditor Change) to flip F03 from reactive to predictive. The EDGAR pipeline already works; this extends it to a different filing type.
+5. Build the fraud registry (S071) → serial deployer (S059) sequence. This activates the highest-accuracy detection chain in the crypto domain.
+6. Defer F13, F20, and F11. These represent scope expansions beyond the current company/project focus. They're legitimate future work but not gap-fills within v2 scope.
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL
