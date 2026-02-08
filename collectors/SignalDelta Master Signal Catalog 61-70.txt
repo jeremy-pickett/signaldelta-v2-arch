@@ -1,0 +1,422 @@
+﻿SignalDelta Master Signal Catalog
+Batch 7: Signals S061–S070
+Version 1.0 DRAFT | February 8, 2026
+Note on Collector_Plan Signal Numbering
+The Collector_Plan (conversation transcript from January 2026) uses signal numbers 61–80 that overlap with the Crypto Brainstorm numbering. Many Collector_Plan signals are implementation variants of previously cataloged brainstorm signals. This batch catalogs them in Collector_Plan order, cross-referencing the corresponding brainstorm catalog entries where they exist and adding new entries where the Collector_Plan introduces genuinely new signal concepts.
+CP#
+	Description
+	Maps To
+	Status
+	61
+	Honeypot Detector
+	S044
+	Implementation variant
+	62
+	Unverified Contract Flag
+	NEW → S062
+	New concept
+	63
+	Liquidity Lock Scanner
+	S045
+	Implementation variant
+	64
+	Serial Deployer Factory
+	S059
+	Implementation variant
+	65
+	GitHub Repo Lookup
+	S043
+	Implementation variant
+	66
+	Exchange Inflow Spike
+	S047
+	Implementation variant
+	67
+	LP Burn Verification
+	NEW → S067
+	New concept
+	68
+	Gas Source Clustering
+	S046 (sub-signal)
+	Implementation variant
+	69
+	Gini Coefficient
+	S058
+	Implementation variant
+	70
+	Bridge Transfer Monitor
+	S053
+	Implementation variant
+	Of these 10, two are genuinely new signals (S062, S067). The remaining eight are implementation plans for previously cataloged signals. For the implementation variants, this batch adds implementation-specific analysis: concrete API endpoints, data pipeline design, and engineering complexity assessments that the brainstorm-level entries did not cover.
+________________
+
+
+S061: Honeypot Detector — Implementation Variant of S044
+Field
+	Value
+	Maps To
+	S044 (Smart Contract Honeypot/Trapdoor Detection)
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	A (Immediate)
+	Collector_Plan Position
+	#6 of 6 in the S/A tier build order (hardest)
+	Implementation Details from Collector_Plan:
+The Collector_Plan clarifies the implementation chain that was fuzzy in the brainstorm:
+1. Contract source of truth: Contract deployed to blockchain as bytecode only. Developer optionally uploads source code to Etherscan for "verification." Etherscan compiles, checks bytecode matches, marks "verified." SignalDelta scrapes verified source via Etherscan API.
+2. Detection method: Python regex on contract source code. Pattern library targets: require(balanceOf[tx.origin] > 0) (sell restriction), hidden mint() functions, onlyOwner drain capabilities, max-transaction-amount manipulation, blacklist functions.
+3. What "unverified" means: When developer never uploads source code. HUGE red flag — "Can't audit the code. Hiding something. Professional projects ALWAYS verify." This insight spawned S062 as a separate signal.
+Implementation Status Update: S044 is already active with 479 signals via the GoPlus/De.Fi audit_analyzer collector. The Collector_Plan's proposed Python regex approach would provide internal honeypot detection as a supplement to the third-party APIs. This creates defense-in-depth: GoPlus catches known patterns, internal regex catches novel patterns that GoPlus hasn't cataloged.
+What the Collector_Plan Adds Beyond Brainstorm:
+* Concrete detection mechanism (regex on verified source)
+* The unverified contract insight (became S062)
+* The proxy contract vulnerability chain (became S073, CP Signal 73)
+* Build order positioning: #6 of 6 (hardest in S/A tier), meaning GoPlus/De.Fi dependency should be maintained while internal capability is developed
+Updated Priority Assessment: S044 is working. The Collector_Plan's internal regex approach is an enhancement, not a replacement. Maintain the existing GoPlus/De.Fi pipeline while building internal capability as a medium-term project.
+________________
+
+
+S062: Unverified Contract Flag (NEW)
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S0 (Private Cognition) — the decision not to verify the contract source code reveals the deployer's intent to hide functionality
+	Chain Affinity
+	CT-05 (Crypto Rug Pull)
+	Original Ref
+	Collector_Plan Signal 62 (sub-signal of 61)
+	Scorer Mapping
+	No direct mapping. Conceptually a sub-signal of S044 but distinct enough to warrant separate treatment.
+	Collection Status
+	Partially available — GoPlus and De.Fi may flag unverified contracts, but the binary check (is source verified on Etherscan?) is trivially available through the Etherscan API getabi endpoint, which returns "Contract source code not verified" for unverified contracts.
+	Directional
+	Yes — unverified contract is bearish. There is essentially no "bullish unverified contract."
+	Estimated Accuracy
+	60–70% as a binary discriminator. The Collector_Plan states the insight clearly: "Professional projects ALWAYS verify." The false positive concern is early-stage projects that haven't yet verified (common in the first hours after deployment) vs. projects that choose not to verify (permanent red flag). A time-gated version (unverified after 24 hours post-deployment) would dramatically reduce false positives from simply-not-yet-verified contracts.
+	Useful For:
+* First-pass filter for the entire crypto signal pipeline. Before running honeypot analysis (S044), liquidity lock checks (S045), or deployer history (S059), check if the contract is verified. Unverified = immediate risk flag. This check is free (single Etherscan API call) and fast (milliseconds).
+* H6 (Concealment as Signal) — not verifying is an active concealment choice. The deployer knows that verification enables public code review. Choosing not to verify is choosing to prevent scrutiny.
+* The time-gated variant (unverified after 24h) is the operationally useful version. Many legitimate projects verify within minutes of deployment. Projects that remain unverified after 24 hours are making a deliberate choice.
+* Combined with S044: verified contract + honeypot functions = sophisticated trap (more dangerous). Unverified contract = unsophisticated trap (easier to detect via other means) but also a stronger red flag because the deployer didn't even bother to create the appearance of legitimacy.
+Validity Notes: Extremely simple, high-value signal. The Etherscan API check is a single HTTP request. This should be the first check in any new token analysis pipeline — before any complex analysis, ask: "is the source code even public?" If no, the risk tier immediately elevates.
+The multi-chain dimension: Etherscan is Ethereum-only. BSCScan, PolygonScan, Arbiscan, and BaseScan provide equivalent verification endpoints for their respective chains. A multi-chain verification check requires querying the appropriate block explorer for each chain.
+What's Missing:
+1. Block explorer API integration for verification status check (Etherscan getabi or getsourcecode endpoint)
+2. Time-gating logic (flag only contracts unverified >24h post-deployment)
+3. Multi-chain block explorer support
+This is among the lowest-effort, highest-value signals in the entire catalog. It should be built as a pipeline prerequisite before any other contract analysis.
+________________
+
+
+S063: Liquidity Lock Scanner — Implementation Variant of S045
+Field
+	Value
+	Maps To
+	S045 (Liquidity Lock Status and Unlock Calendar)
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	A (Immediate)
+	Collector_Plan Position
+	#2 of 6 in the S/A tier build order
+	Implementation Details from Collector_Plan:
+The Collector_Plan describes this as "Moderate complexity: web scraping + date math" and confirms the IALD significance: "This is a huge POTENTIAL RUGPULL or POTENTIAL INSIDER LIQUIDATION event."
+Concrete implementation path:
+1. UNCX Network: Provides lock verification for Uniswap LP tokens. API or scraping their lock page per token.
+2. Team Finance: Alternative lock platform with similar data availability.
+3. Direct contract analysis: LP token lock contracts are on-chain. Monitor the lock contract for the LP token address, extract lock expiration timestamp.
+4. Date math: Compare current time to lock expiration. Flag locks expiring within 7 days.
+What the Collector_Plan Adds Beyond Brainstorm:
+* "Web scraping + date math" — explicit acknowledgment that this is simpler than most crypto signals
+* Confirmation that lock expiration IS a "POTENTIAL RUGPULL or POTENTIAL INSIDER LIQUIDATION event"
+* Build order: #2 of 6 (second easiest in S/A tier), suggesting it should be built early
+* Dovetails with CP Signal 74 (token unlock schedule), creating a unified calendar of all upcoming unlock/expiration events
+Updated Priority Assessment: S045 has the unlock_anticipation scorer entry (D tier) but the LP-specific lock monitoring isn't instrumented. The Collector_Plan's build order (#2) is correct — this is moderate complexity with high impact. Should be built after S062 (verification check, trivial) and before S059 (serial deployer, complex).
+________________
+
+
+S064: Serial Deployer Factory — Implementation Variant of S059
+Field
+	Value
+	Maps To
+	S059 (Meme Coin Launch Factory Pattern Detection)
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	S (Immediate — highest priority)
+	Collector_Plan Position
+	#4 of 6 in S/A tier build order
+	Implementation Details from Collector_Plan:
+"Complex: bytecode similarity + pattern matching. Highest impact: preemptive scammer identification."
+Concrete implementation path:
+1. Deployer wallet history: For every new token contract, query deployer wallet's transaction history on the block explorer. Count previous contract deployments.
+2. Outcome tracking: For each previous deployment, check current token status (price, liquidity, trading volume). Flag tokens with >90% drawdown from peak.
+3. Pattern scoring: >5 tokens deployed in 90 days with >80% experiencing >90% drawdown = serial rug puller.
+4. Bytecode similarity: When deployer rotates wallets, compare bytecode of new contract against known rug pull contract templates. Cosine similarity or diff-based matching.
+5. Fund flow convergence: Trace ETH/stablecoin proceeds from multiple token deployments. If proceeds from 3+ tokens converge to the same wallet, the deployer wallets are linked.
+6. Cross-chain: "Rug pull deployer on BSC → immediately flag on ALL EVM chains."
+What the Collector_Plan Adds Beyond Brainstorm:
+* Explicit build complexity assessment: "Complex" but "highest impact"
+* The cross-chain flagging concept — most important architectural insight
+* Fund flow convergence as the wallet rotation counter-measure
+* Build order: #4, after simpler signals but before exchange inflow and honeypot
+Updated Priority Assessment: S059 at 75–85% accuracy is the highest-accuracy unbuilt signal. The Collector_Plan correctly rated it S-tier. The complexity (bytecode similarity, cross-chain tracking) means it's not a quick build, but the impact justifies the investment. The OSINT rug pull address database (CP Signal 71, covered in this batch as S071) is a prerequisite — you need known bad addresses to bootstrap the detection system.
+________________
+
+
+S065: GitHub Repo Lookup — Implementation Variant of S043
+Field
+	Value
+	Maps To
+	S043 (GitHub Commit Velocity and Pattern Anomalies)
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	B (Next)
+	Implementation Details from Collector_Plan:
+Your question: "Can we look up github repos by coin? Is that even realistic?"
+Answer from the conversation:
+1. CoinGecko/CoinMarketCap APIs return project links (website, GitHub, social)
+2. Many tokens have GitHub in their on-chain metadata
+3. Scrape project websites for GitHub links
+4. Build a crypto_projects table mapping ticker → GitHub repo
+What the Collector_Plan Adds Beyond Brainstorm:
+* Confirmed feasibility path: CoinGecko → GitHub URL → GitHub API
+* Acknowledgment of coverage limitation: "not all coins have github repos"
+* The crypto_projects mapping table concept — a shared infrastructure component that multiple collectors (GitHub, domain, social) would use
+Updated Priority Assessment: B tier is correct. The GitHub → commit velocity pipeline is valuable but depends on the crypto_projects mapping table, which is shared infrastructure. Building that table first unlocks S043 (GitHub), S050 (domain), and parts of S057 (team identity).
+________________
+
+
+S066: Exchange Inflow Spike — Implementation Variant of S047
+Field
+	Value
+	Maps To
+	S047 (Exchange Hot Wallet Inflow Anomaly)
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Collector_Plan Tier
+	A (Immediate)
+	Collector_Plan Position
+	#5 of 6 in S/A tier build order
+	Implementation Details from Collector_Plan:
+"Moderate: track transfers to known CEX wallets. Challenge: maintaining CEX wallet database."
+Your comment: "This would be amazing, I think we may have issues with 'knowing where to start' though. If so, it's shared across a lot of collectors."
+This is the correct concern. The CEX wallet database is shared infrastructure:
+1. Known exchange deposit addresses: Etherscan labels, Arkham labels, Nansen labels
+2. Maintenance problem: Exchanges rotate hot wallet addresses, create new deposit addresses per user
+3. Bootstrap approach: Start with Arkham-labeled exchange wallets (most comprehensive), supplement with Etherscan labels
+4. Ongoing maintenance: Monitor for new exchange wallet identifications
+What the Collector_Plan Adds Beyond Brainstorm:
+* The "knowing where to start" problem is explicitly identified
+* CEX wallet database as shared infrastructure dependency
+* Moderate complexity assessment
+* Build order: #5, reflecting the shared infrastructure dependency
+Updated Priority Assessment: S047 remains the #1 crypto action item (broken collector, 23,002 raw whale transactions, B-tier scorer entry waiting for data). The Collector_Plan's A-tier priority confirms this. The CEX wallet database is the prerequisite. Arkham labeling provides the bootstrap data.
+________________
+
+
+S067: LP Burn Verification (NEW)
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S2 (Infrastructure Response) — LP burn is a permanent infrastructure commitment (liquidity can never be removed); the absence of LP burn is S2-level infrastructure risk
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — LP burn is the strongest possible anti-rug signal
+	Original Ref
+	Collector_Plan Signal 67
+	Scorer Mapping
+	No mapping
+	Collection Status
+	Not built
+	Collector_Plan Tier
+	B (Next)
+	Directional
+	Yes — LP burn verified is bullish (liquidity permanently committed); LP not burned is risk factor (liquidity can be removed)
+	Estimated Accuracy
+	65–75% as a binary discriminator. LP burn is the strongest possible commitment signal in DeFi because it's irreversible. A project that burns LP tokens has permanently locked liquidity in the DEX pool — it cannot be removed, ever. This eliminates the primary rug pull mechanism (liquidity removal).
+	Useful For:
+* Anti-rug pull verification. LP burn is the crypto equivalent of burning the ships — the team cannot exit via liquidity removal. This doesn't prevent all rug pull types (they can still sell accumulated tokens into the pool), but it eliminates the most common and most devastating variant (drain all liquidity, token becomes worthless overnight).
+* Inverse signal relationship with S045 (Liquidity Lock): locks are temporary commitments (can expire, can be modified); burns are permanent commitments. The risk hierarchy is: burn > long-duration lock > short-duration lock > no lock > unverified.
+* Your Collector_Plan comment: "YES. And tier B is right on the money. When IALD is really, really close, it could be the tipping point." The insight is correct: LP burn status modulates the confidence of other signals. If a token has burned LP, the CT-05 probability drops substantially regardless of other signals. If LP is not burned, every other bearish crypto signal carries more weight.
+Implementation: Technically straightforward. LP token burn is detectable by checking whether the LP tokens were sent to a dead address (0x000...dead, 0x000...0000). On Uniswap V2, LP tokens are standard ERC-20 tokens — check the balance of the dead address for the specific LP token contract. If balance > 0, LP was burned. The percentage burned matters: 100% burn = full commitment; 50% burn = partial commitment.
+For Uniswap V3, the mechanism is different (NFT positions, not fungible LP tokens), but the concept is equivalent: check if the position is owned by a dead address or a lock contract.
+Validity Notes: One of the simplest, most reliable signals in the crypto domain. The check is a single on-chain query (LP token balance of dead address). The interpretation is unambiguous (burned = permanent, not burned = removable). The only nuance is partial burns (some LP burned, some retained) and the distinction between burn and long-duration lock.
+This signal directly strengthens the CT-05 detection package. It should be checked alongside S062 (verified contract?) and S044 (honeypot functions?) as part of a three-check first-pass filter: verified? clean? burned? If yes to all three, CT-05 probability drops significantly.
+What's Missing:
+1. Dead address balance query for LP tokens (trivial on-chain call)
+2. LP token contract identification per trading pair
+3. Burn percentage calculation (burned / total LP supply)
+4. V2 vs. V3 handling (different LP token mechanisms)
+________________
+
+
+S068: Gas Source Clustering — Implementation Variant of S046
+Field
+	Value
+	Maps To
+	S046 (Wallet Clustering and Entity Identification) — specific sub-signal
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Collector_Plan Tier
+	C (Future)
+	Implementation Details from Collector_Plan:
+Your comment: "Can you actually do this? Yes, gas clustering is kind of wild west I think in the blockchain analysis world."
+Gas source clustering is one specific technique within the broader S046 entity resolution framework:
+1. Concept: Every transaction requires gas (ETH for fees). New wallets need gas from somewhere. If 10 wallets all received their initial gas from the same source wallet, they're likely controlled by the same entity.
+2. Implementation: For a set of target wallets (e.g., top holders of a token), trace backward to find the first incoming ETH transaction for each wallet. If multiple target wallets share a gas source, cluster them.
+3. Limitations: Gas source analysis is well-known; sophisticated actors use gas randomization (multiple source wallets, CEX withdrawals for gas). But for the long tail of less sophisticated operators, it's effective.
+What the Collector_Plan Adds Beyond Brainstorm:
+* "Wild west" assessment is honest — this is a known technique in blockchain forensics but not standardized
+* It's a C-tier (Future) priority, reflecting that it's one component of the broader S046 entity resolution system, not a standalone priority
+Updated Priority Assessment: Gas source clustering is a technique within S046, not a standalone signal. It should be implemented as part of the entity resolution pipeline when S046 is built. C-tier timing is correct.
+________________
+
+
+S069: Gini Coefficient — Implementation Variant of S058
+Field
+	Value
+	Maps To
+	S058 (Token Concentration Gini Coefficient Trajectory)
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Collector_Plan Tier
+	C (Future)
+	Implementation Details from Collector_Plan:
+Your comment: "More investigation, I just don't understand them."
+The Gini coefficient is a standard inequality measure (0 = perfect equality, 1 = one entity holds everything). Applied to token distribution: fetch top N holders, compute Gini, track over time. Increasing Gini = increasing concentration = elevated dump risk.
+The Collector_Plan's C-tier placement is correct. S058/S069 depends on S046 (entity resolution) to produce meaningful results — without entity resolution, exchange wallets and staking contracts inflate apparent concentration. Building S069 before S046 would produce misleading metrics.
+________________
+
+
+S070: Bridge Transfer Monitor — Implementation Variant of S053
+Field
+	Value
+	Maps To
+	S053 (Cross-Chain Bridge Transfer Patterns)
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Collector_Plan Tier
+	C (Future)
+	Implementation Details from Collector_Plan:
+Your comment: "More investigation, I just don't understand them."
+The Collector_Plan's clarification note explains the cross-chain concept: bridges allow tokens/value to move between blockchains. Monitoring bridge transactions identifies when project treasuries or whale wallets move assets from the project's native chain to chains with deeper exit liquidity. The Collector_Plan's broader insight — "Track fund flows across chains via bridges. Build multi-chain reputation graphs" — frames this as infrastructure for the cross-chain reputation system rather than a standalone signal.
+C-tier placement is correct. Bridge monitoring is architecturally important (enables cross-chain entity tracking) but not an urgent standalone signal. The privacy chain detection variant (treasury → Tornado Cash) should be prioritized above generic bridge monitoring if resources are limited.
+________________
+
+
+Batch 7 Summary
+ID
+	Name
+	Family
+	New/Variant
+	CP Tier
+	Est. Accuracy
+	Key Insight
+	S061
+	Honeypot Detector (impl)
+	F15
+	Variant of S044
+	A
+	70–80%
+	Internal regex supplements GoPlus/De.Fi
+	S062
+	Unverified Contract Flag
+	F15
+	NEW
+	(B implied)
+	60–70%
+	Cheapest signal in catalog: 1 API call
+	S063
+	Liquidity Lock Scanner (impl)
+	F15
+	Variant of S045
+	A
+	60–70%
+	"Web scraping + date math"
+	S064
+	Serial Deployer Factory (impl)
+	F15
+	Variant of S059
+	S
+	75–85%
+	Cross-chain flagging is key insight
+	S065
+	GitHub Repo Lookup (impl)
+	F15
+	Variant of S043
+	B
+	55–65%
+	crypto_projects mapping table is shared infra
+	S066
+	Exchange Inflow Spike (impl)
+	F14
+	Variant of S047
+	A
+	65–75%
+	CEX wallet DB is shared infra bottleneck
+	S067
+	LP Burn Verification
+	F15
+	NEW
+	B
+	65–75%
+	Strongest anti-rug commitment signal
+	S068
+	Gas Source Clustering (impl)
+	F14
+	Sub-signal of S046
+	C
+	55–65%
+	"Wild west" but effective for unsophisticated actors
+	S069
+	Gini Coefficient (impl)
+	F14
+	Variant of S058
+	C
+	50–60%
+	Depends on S046 entity resolution
+	S070
+	Bridge Transfer Monitor (impl)
+	F14
+	Variant of S053
+	C
+	50–60%
+	Privacy chain variant highest priority
+	Key Observations, Batch 7
+Only two genuinely new signals in this batch (S062, S067), but both are high-value.
+S062 (Unverified Contract Flag) is the single cheapest signal in the entire 70-signal catalog. One API call to Etherscan's getsourcecode endpoint. Binary result: verified or not. Should be the first check in any new token analysis pipeline. Combined with S044 (honeypot) and S067 (LP burn), these three create a 30-second first-pass filter: Verified? Clean? Burned? — that eliminates the most obvious fraud before any complex analysis begins.
+S067 (LP Burn Verification) is the strongest commitment signal in DeFi. LP burn is irreversible — it permanently eliminates the most common rug pull mechanism. Your Collector_Plan comment captured it perfectly: "When IALD is really, really close, it could be the tipping point." The signal is binary, unambiguous, cheap to check, and directly modulates CT-05 probability. It should be built alongside S062 as part of the first-pass filter.
+The Collector_Plan reveals shared infrastructure dependencies that the brainstorm doesn't. Two critical shared resources emerge:
+1. crypto_projects mapping table (ticker → website → GitHub → social links) — needed by S043 (GitHub), S050 (domain), S057 (team), and others
+2. CEX wallet database (known exchange deposit addresses) — needed by S047 (exchange inflow), S055 (pump group detection), and cross-chain tracking
+These are infrastructure builds, not signal builds. They should be prioritized as platform capabilities, not individual signal implementations.
+The Collector_Plan's build order is validated by the catalog analysis. The S/A tier build order was:
+1. Signal 79: Token Supply Inflation Trap (S tier) — cataloged in Batch 8 as S079
+2. Signal 63: Liquidity Lock Scanner (A tier) — S045
+3. Signal 71: Team Wallet History Audit (A tier) — cataloged in Batch 8 as S071
+4. Signal 64: Serial Deployer Factory (S tier) — S059
+5. Signal 66: Exchange Inflow Spike (A tier) — S047
+6. Signal 61: Honeypot Detector (A tier) — S044
+Adding the two new signals from this batch, the revised optimal build order becomes:
+1. S062 (Unverified Contract) — trivial, first-pass filter prerequisite
+2. S067 (LP Burn) — trivial, first-pass filter prerequisite
+3. S079 (Supply Inflation) — S tier, simple (totalSupply tracking)
+4. S063/S045 (Lock Scanner) — A tier, moderate
+5. S071 (Team Wallet History) — A tier, database
+6. S064/S059 (Serial Deployer) — S tier, complex
+7. S066/S047 (Exchange Inflow) — A tier, fix broken collector
+8. S061/S044 (Honeypot internal) — A tier, supplement existing
+________________
+
+
+Ready for Batch 8: Signals S071–S080 (Collector_Plan 71–80)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

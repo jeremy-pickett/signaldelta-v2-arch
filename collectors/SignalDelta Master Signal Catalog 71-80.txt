@@ -1,0 +1,479 @@
+﻿SignalDelta Master Signal Catalog
+Batch 8: Signals S071–S080
+Version 1.0 DRAFT | February 8, 2026
+Collector_Plan Overlap Map
+CP#
+	Description
+	Maps To
+	Status
+	71
+	Team Wallet History Audit
+	NEW → S071
+	New concept
+	72
+	Domain/WHOIS Lookup
+	S050
+	Implementation variant
+	73
+	Proxy/Upgrade Key Analysis
+	NEW → S073
+	New concept
+	74
+	Unlock Schedule Monitor
+	S054
+	Implementation variant
+	75
+	Website Abandonment
+	S050 (sub-signal)
+	Implementation variant
+	76
+	Wash Trading Detection
+	NEW → S076
+	New concept
+	77
+	First Buyer Advantage
+	NEW → S077
+	New concept
+	78
+	Stablecoin Liquidity Shift
+	S060
+	Implementation variant
+	79
+	Token Supply Inflation Trap
+	NEW → S079
+	New concept
+	80
+	Cross-DEX Liquidity Drain
+	NEW → S080
+	New concept
+	Six new signals, four implementation variants. The new signals are the strongest batch from the Collector_Plan — S079 (Supply Inflation) was rated S-tier, and S080 (Cross-DEX Drain) drew the "god mode" comment.
+________________
+
+
+S071: Team Wallet History Audit (NEW)
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S0 (Private Cognition) — a deployer's history reveals their systematic intent. Past behavior IS the private cognition signal — you're reading their track record, not their current thoughts, but the track record is predictive.
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — the team wallet reputation system IS the CT-05 early warning system
+	Original Ref
+	Collector_Plan Signal 71
+	Collector_Plan Tier
+	A (Immediate)
+	CP Build Position
+	#3 of 6 in S/A tier build order
+	Scorer Mapping
+	No mapping. Feeds into crypto_team (C tier, 1.10x, Arkham) by providing enriched team reputation data.
+	Collection Status
+	Not built. Requires fraud registry as prerequisite.
+	Directional
+	Yes — team wallet linked to prior rugs is unambiguously bearish. Clean history is neutral (absence of evidence is not evidence of absence).
+	Estimated Accuracy
+	70–80%. A team wallet address that appeared in a prior rug pull and is now deploying a new token is among the most reliable fraud predictors available. The accuracy depends on the quality and completeness of the fraud registry. With a comprehensive registry, accuracy is very high because rug pullers are recidivists — they reuse infrastructure out of tooling convenience and laziness.
+	Useful For:
+* This is the data foundation that S059 (Serial Deployer Factory) and S046 (Wallet Clustering) depend on. S059 detects serial deployment patterns; S071 provides the known bad actor database that bootstraps the detection. Without S071, S059 has no ground truth to learn from.
+* The Collector_Plan identified concrete OSINT sources for bootstrapping the fraud registry:
+   * rugpull.wtf — community-maintained rug pull database
+   * tokensniffer.com — automated scam detection with address flagging
+   * @rugpullbot (Twitter) — real-time rug pull alerts with addresses
+   * r/CryptoScamReport (Reddit) — community reports
+   * CertiK alerts — professional security alerts with addresses
+   * Internal accumulation — SignalDelta's own detections added over time
+* Your OSINT instinct was correct: "I wonder if deepseek, LLaMA, Perplexity, or Qwen has records of rug pull addresses. Are there OSINT sources we can start quietly harvesting?" The answer is yes — the sources above are public, scrapable, and collectively cover a substantial fraction of known rug pull addresses. The LLM angle is interesting for semi-structured extraction from Reddit/Twitter posts that mention addresses in natural language.
+* The fraud registry is a persistent, growing asset. Every rug pull SignalDelta detects adds addresses to the registry. Over time, the registry becomes a competitive moat — the more history you accumulate, the more accurately you can flag recidivists.
+Validity Notes: High confidence, high impact. The Collector_Plan correctly rated this A-tier and placed it #3 in the S/A build order (after Supply Inflation and Lock Scanner, before Serial Deployer). The ordering is significant: S071 (fraud registry) is a prerequisite for S059 (serial deployer), so it must be built first.
+The cross-chain dimension from the Collector_Plan is critical: "Rug pull deployer on BSC → immediately flag on ALL EVM chains. Scammers often reuse addresses out of laziness/tooling." Since EVM addresses are chain-agnostic (same address format across Ethereum, BSC, Polygon, Arbitrum, Base), a single address flagged on one chain is immediately flagged everywhere.
+The accuracy estimate (70–80%) assumes a well-curated registry with low false positive rate. The main risk is poisoned data — if community-sourced reports include addresses that were incorrectly attributed to fraud (e.g., exchange wallets misidentified as rug pull wallets), the registry generates false positives. A confidence scoring system per address (number of independent sources reporting it, consistency of reports) would mitigate this.
+What's Missing:
+1. Fraud registry database schema (address, chain, associated project, fraud type, date, source, confidence score)
+2. OSINT scraper for bootstrap sources (rugpull.wtf, tokensniffer, etc.)
+3. Cross-chain address propagation logic
+4. Confidence scoring per address
+5. Integration with S059 (serial deployer) and S046 (wallet clustering)
+6. Ongoing ingestion pipeline (new rug pulls detected → addresses added to registry)
+________________
+
+
+S072: Domain/WHOIS Lookup — Implementation Variant of S050
+Field
+	Value
+	Maps To
+	S050 (Project Website/Domain Activity Anomalies)
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	D (Low Priority)
+	Implementation Details from Collector_Plan:
+Your comment: "Use Haiku or GPT instant (or whatever it is called) to connect a crypto ticker (DOT) to the official website and then WHOIS the website. That's infosec analyst 101 right there, mon ami."
+This is a clean implementation path:
+1. CoinGecko API → project homepage URL
+2. WHOIS lookup on domain → registration date, expiration date, registrar, privacy status
+3. LLM (local Qwen or Haiku) for disambiguation when CoinGecko doesn't have the URL — ask the model "what is the official website for [token name]?" and verify against on-chain metadata
+The D-tier priority is correct per Collector_Plan — domain monitoring is valuable but less urgent than contract-level analysis. S050's catalog entry already covers the signal analysis; this is purely the implementation path.
+________________
+
+
+S073: Proxy/Upgrade Key Analysis (NEW)
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S2 (Infrastructure Response) — the proxy mechanism IS the upgrade infrastructure; the admin key IS the infrastructure control point
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — proxy contracts enable "delayed rug" where the contract appears safe at launch but is later upgraded to include malicious functions
+	Original Ref
+	Collector_Plan Signal 73
+	Collector_Plan Tier
+	B (Next)
+	Scorer Mapping
+	No mapping
+	Collection Status
+	Not built
+	Directional
+	Yes — single-wallet admin key on upgradeable proxy is bearish. Multi-sig admin or renounced ownership is neutral-to-bullish. Time-locked admin is moderately protective.
+	Estimated Accuracy
+	60–70%. The logic is straightforward: if one wallet can unilaterally change the contract's implementation, that wallet can introduce malicious functionality at any time. The proxy pattern is legitimate for upgradeable protocols (nearly all major DeFi protocols use proxies), but the governance of the admin key is what distinguishes legitimate upgradeable contracts from rug-pull-capable contracts.
+	Useful For:
+* This is the sophisticated version of honeypot detection (S044). S044 detects malicious functions in the current contract code. S073 detects the capability to introduce malicious functions later. A contract that passes S044's honeypot check today can fail it tomorrow if the admin swaps the implementation.
+* The Collector_Plan explanation clarified the mechanism for you:
+   * User interacts with proxy contract (unchanging address)
+   * Proxy delegates to "implementation" contract (the actual logic)
+   * Admin can change which implementation the proxy points to
+   * Admin key = can swap in malicious implementation overnight
+   * Check: is admin a single wallet or multi-sig?
+* The risk hierarchy for admin key governance:
+   1. Ownership renounced (admin = 0x0): safest, no one can upgrade. But also means bugs can never be fixed.
+   2. Multi-sig admin (e.g., Gnosis Safe with 3-of-5): reasonably safe, requires coordination to upgrade
+   3. Timelock admin (admin can upgrade but changes take 24–48h to execute): protective because community can detect and respond
+   4. Single-wallet admin: most dangerous. One private key compromise or one bad actor can swap the implementation instantly.
+   5. Unverified proxy: can't even determine the admin structure. Combines S062 (unverified) with S073 (proxy) for maximum risk.
+* Cross-reference with S044: a proxy contract with clean implementation today + single-wallet admin = latent rug pull capability. The contract currently passes honeypot checks but can be weaponized at any time.
+Validity Notes: This signal fills the gap in S044's detection model. S044 asks "is the code currently malicious?" — S073 asks "can the code become malicious?" Together they cover both present and future risk.
+The proxy pattern is standard in professional DeFi (Aave, Compound, Uniswap V3 governance all use proxies with timelocks and multi-sigs). The signal isn't "proxy = bad" — it's "proxy + single-wallet admin = dangerous." The admin key governance assessment is the discriminating factor.
+Detection is technically feasible: proxy contracts follow standard patterns (EIP-1967, OpenZeppelin TransparentProxy, UUPS). The proxy admin address is stored at a known storage slot. Reading this storage slot and then checking whether the admin is a contract (multi-sig/timelock) or an EOA (single wallet) provides the risk classification.
+What's Missing:
+1. Proxy pattern detection (identify contracts using EIP-1967 or similar proxy patterns)
+2. Admin address extraction (read admin storage slot)
+3. Admin type classification (EOA vs. multi-sig vs. timelock vs. renounced)
+4. Implementation change monitoring (detect when admin actually swaps the implementation — this would be an acute signal, not just a risk factor)
+5. Integration with S044: if admin swaps implementation, re-run honeypot analysis on new implementation
+The implementation change monitoring (item 4) deserves emphasis. This would be a real-time alert: "proxy contract for [token] just had its implementation changed by admin wallet [address]." When this fires, the new implementation should be immediately analyzed by S044 for honeypot functions. If the new implementation adds sell restrictions or mint functions that weren't in the previous implementation, it's a rug in progress.
+________________
+
+
+S074: Unlock Schedule Monitor — Implementation Variant of S054
+Field
+	Value
+	Maps To
+	S054 (Token Unlock/Vesting Schedule Event Anticipation)
+	Family
+	F12: Calendar & Event Structure
+	Collector_Plan Tier
+	C (Future)
+	Your comment: "This dovetails into 63 [lock scanner]." Correct — S054 (token vesting unlocks) and S045 (LP liquidity locks) are different mechanisms (token vesting vs. LP token locking) but the same analytical pattern (calendar event with supply release). They should share a unified "upcoming unlock calendar" pipeline that aggregates both token vesting events and LP lock expirations into a single timeline view.
+________________
+
+
+S075: Website Abandonment — Implementation Variant of S050
+Field
+	Value
+	Maps To
+	S050 (Project Website/Domain Activity Anomalies) — sub-signal
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Collector_Plan Tier
+	D (Low Priority)
+	Your comment: "Needs more research, and yeah it's a tier D at best."
+D-tier is correct for the basic website-up/website-down check. The S050 catalog entry already covers the more informative variants (domain expiration trajectory, SSL lapse, WHOIS privacy change). Website HTTP status monitoring is a simple supplement — if the project website returns 500/404 for >7 consecutive days, the project may be dead. Cheap to implement (cron job with curl), low signal-to-noise ratio individually, contributes to the "abandonment trifecta" (S041 + S043 + S050).
+________________
+
+
+S076: Wash Trading Detection (NEW)
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S4 (Narrative Formation) — wash trading creates a false narrative of organic volume and activity. The inflated volume IS the narrative; it's designed to attract real participants.
+	Chain Affinity
+	CT-10 (Pump-and-Dump) — wash trading is the setup phase that creates the appearance of activity before the dump; CT-05 (Rug Pull) — wash trading inflates volume metrics to attract victims
+	Original Ref
+	Collector_Plan Signal 76
+	Collector_Plan Tier
+	C (Future)
+	Scorer Mapping
+	No mapping
+	Collection Status
+	Not built
+	Directional
+	Not directly — wash trading is a deception signal, not a directional one. The presence of wash trading is bearish (indicates manipulation), but doesn't tell you when the dump will happen. It's a risk factor that elevates CT-05 and CT-10 priors.
+	Estimated Accuracy
+	55–65%. Wash trading detection is a well-studied problem in crypto (Cong et al. 2023 estimate 70% of reported volume on unregulated exchanges is wash trading). On DEXs, the detection is more tractable because transaction paths are fully visible on-chain. The challenge is distinguishing wash trading from legitimate circular flows (arbitrage, automated market making, rebalancing strategies).
+	Useful For:
+* Volume authenticity assessment. Before interpreting any volume-based signal (S003 options volume, S048 CEX listing front-running, S055 pump group detection), you need to know whether the volume is real. Wash trading detection is a prerequisite filter for all volume-based signals in the crypto domain.
+* The Collector_Plan clarified the distinction you asked about: "Wash trading ≠ mixing. Mixing: send crypto to service, get 'clean' crypto back. Wash trading: same entity buys/sells to itself to fake volume." Both are relevant to IALD but through different mechanisms:
+   * Wash trading = false narrative (S4 stage manipulation)
+   * Mixing = concealment of fund flows (H6 Concealment as Signal)
+* Your follow-up insight was sharp: "mixers giving you your own money back is right out of 2016-2022 crypto fraudsters. It is probably rare, but it's a decent signal." Mixer interaction by a project team wallet should be its own sub-signal — it's not wash trading but it IS concealment, and it feeds the same CT-05 evidence.
+* Detection patterns on DEXs:
+   * Circular flow: Wallet A → DEX → Wallet B → DEX → Wallet A (same entity, round-trip through two swaps)
+   * Self-trading: Same wallet submits both sides of a trade (possible on some DEX architectures)
+   * Volume inflation: Multiple wallets (same entity per S046 clustering) trading back and forth to inflate volume metrics on DEX screeners
+Validity Notes: The concept is valid and the on-chain transparency of DEXs makes detection feasible. The C-tier placement is appropriate — it's a valuable filter but complex to implement and the false positive rate from legitimate circular flows (arb bots, rebalancing) is significant.
+The mixer interaction sub-signal deserves separate treatment. Team treasury → Tornado Cash is already flagged in S053 (Bridge/Privacy Chain) as a high-confidence bearish signal. Mixer interaction by non-team wallets associated with a token (e.g., early buyers laundering proceeds) is a weaker but still informative signal.
+What's Missing:
+1. Circular flow detection algorithm (trace DEX swap paths for round-trips within N blocks)
+2. Entity-adjusted volume computation (remove wash volume from reported volume using S046 entity resolution)
+3. Mixer interaction detection (token-associated wallets interacting with known mixer contracts)
+4. Volume authenticity score per token (real_volume / reported_volume ratio)
+________________
+
+
+S077: First Buyer Advantage Detection (NEW)
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S3 (Capital Commitment) — first buyers' positions ARE the earliest capital commitment; S0 (Private Cognition) — buying in the first block or first minute requires advance knowledge of the token's existence and contract address
+	Chain Affinity
+	CT-10 (Pump-and-Dump) — first-block buyers in pump tokens are the pump organizers; CT-05 (Rug Pull) — first buyers who are linked to the deployer are the scammer's wallets
+	Original Ref
+	Collector_Plan Signal 77
+	Collector_Plan Tier
+	B (Next)
+	Scorer Mapping
+	No mapping
+	Collection Status
+	Not built
+	Directional
+	Not directly — first buyer advantage detection is a diagnostic signal that identifies who has insider access, not what direction the price will go. The diagnostic value is in linking first buyers to deployers, influencers, or pump group operators.
+	Estimated Accuracy
+	60–70%. The first-buyer advantage is one of the most robust patterns in crypto: wallets that buy in the first block after a token launches achieve systematically better returns than wallets that buy later. This is mechanically guaranteed for rug pulls (first buyers get low prices, later buyers provide exit liquidity). The IALD question is whether first-block buying requires advance knowledge (insider) or just speed (bot).
+	Useful For:
+* Insider identification: if the same wallet is consistently among the first 10 buyers across multiple new token launches, it either has advance knowledge of launches (insider) or runs a sophisticated sniping bot (speed advantage). Either way, it's a wallet worth tracking.
+* Your comment: "there are lots of ways to infer a launch, or infer the 'onboarding of a major influencer' by looking at volume." This connects S077 to S048 (CEX Listing Front-Running) and S049 (Influencer Wallet-to-Content Timing): first buyers who also appear as pre-listing accumulators or pre-content buyers are repeat insider actors.
+* Cross-reference with S059 (Serial Deployer) and S071 (Team Wallet History): if first buyers of a new token are linked (via S046 wallet clustering) to the deployer wallet, they're the deployer's own wallets buying to create the appearance of organic demand. This is a different detection approach than S059's deployer history — it works forward from launch activity rather than backward from deployer history.
+* Bot vs. insider discrimination: sniping bots buy everything at launch indiscriminately; insiders buy specific tokens selectively. A wallet that's first-block buyer on 500 tokens is a bot. A wallet that's first-block buyer on 3 tokens that all pump is an insider. The selectivity of first-buying is the discriminator.
+Validity Notes: Strong concept, moderate implementation complexity. The data is fully on-chain: for any token, the first N transactions are visible in the block explorer. The analysis is: who bought first? → do they have a pattern of buying first across multiple tokens? → are they linked to the deployer? → do the tokens they first-buy perform differently than random tokens?
+The sniping bot contamination is the main challenge. In the current DEX ecosystem, dozens of sniping bots compete to be the first buyer on every new token. These bots are not informed — they're playing a speed game and accepting heavy losses on most tokens in exchange for occasional large wins. Filtering bot activity from informed first-buying requires the selectivity analysis described above.
+What's Missing:
+1. First-buyer extraction per new token (first N transactions after liquidity added)
+2. Cross-token first-buyer frequency analysis (is this wallet a repeat first buyer?)
+3. First-buyer → deployer linkage check (via S046 entity resolution)
+4. Selectivity analysis (does this wallet first-buy selectively or indiscriminately?)
+5. Outcome tracking (do this wallet's first-buys outperform random?)
+________________
+
+
+S078: Stablecoin Liquidity Shift — Implementation Variant of S060
+Field
+	Value
+	Maps To
+	S060 (Stablecoin Pair Liquidity Ratio Divergence)
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Collector_Plan Tier
+	B (Next)
+	The Collector_Plan provided the clearest mechanistic explanation of any signal in the project:
+"DEX pools have different pairs: TOKEN/ETH pool (volatile pair), TOKEN/USDC pool (stablecoin pair). If team wants to exit, they want USDC (stable value). They shift liquidity: drain TOKEN/ETH, increase TOKEN/USDC. Then dump into USDC pool, get stablecoins, exit. Signal: Watch ratio change of USDC pool TVL / ETH pool TVL."
+This is a beautifully specific signal definition. The metric is a single ratio tracked over time. The implementation path is: enumerate DEX pools per token → classify pools by pair type (stablecoin vs. volatile) → compute TVL ratio → track trajectory → flag anomalous shifts.
+Your initial comment was "I flat out do not understand this one" — the explanation successfully clarified it and you agreed at B tier. The S060 catalog entry covers the signal analysis; the Collector_Plan adds the concrete DEX pool monitoring implementation path.
+________________
+
+
+S079: Token Supply Inflation Trap (NEW)
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S2 (Infrastructure Response) — totalSupply() is a protocol-level infrastructure metric; unexpected inflation IS the protocol's infrastructure being manipulated
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — supply inflation is a rug pull mechanism (mint new tokens, dump them, dilute existing holders)
+	Original Ref
+	Collector_Plan Signal 79
+	Collector_Plan Tier
+	S (Immediate — highest priority)
+	CP Build Position
+	#1 of 6 in S/A tier build order (simplest S-tier signal)
+	Scorer Mapping
+	No mapping
+	Collection Status
+	Not built
+	Directional
+	Yes — unexpected supply inflation is unambiguously bearish. If totalSupply() increases without a publicly disclosed reason (legitimate inflation mechanism, staking rewards, scheduled emission), someone is minting tokens and diluting holders.
+	Estimated Accuracy
+	75–85%. This shares the top accuracy tier with S059 (Serial Deployer) for the same reason: it's deterministic, not probabilistic. If totalSupply() at time T₁ > totalSupply() at time T₀, tokens were minted. Period. The only question is whether the minting was legitimate (scheduled emission, staking rewards, governance-approved) or malicious (admin exercised hidden mint function). The "unexpected" filter — minting that exceeds the documented emission schedule — narrows to the malicious cases.
+	Useful For:
+* This is the simplest S-tier signal in the entire project. The Collector_Plan rated it first-to-build for good reason: "Simplest: just track totalSupply() over time. High impact: definitive fraud signal."
+* Your comment: "YES. That might even be S tier." It is. When totalSupply() silently increases by 50% without any governance proposal, staking mechanism, or documented emission schedule to explain it, the admin just minted tokens for free. This is theft by dilution.
+* Implementation is a single on-chain call: totalSupply() returns the current token supply. Call it periodically (hourly or daily). If it increases by more than the expected emission rate, flag it.
+* Cross-reference with S044 (Honeypot) and S073 (Proxy Admin): S044 detects whether the contract has a mint function. S073 detects whether an admin can add a mint function via proxy upgrade. S079 detects whether a mint function was actually executed. These are three stages of the same threat: capability → access → execution.
+* The three signals together form a mint function threat chain:
+   1. S044: Does the contract have a mint function? (capability)
+   2. S073: Can the admin add one via proxy upgrade? (access)
+   3. S079: Did totalSupply() actually increase unexpectedly? (execution) S079 is the only one that detects actual harm rather than potential harm.
+Validity Notes: This should have been built first. It's the simplest, most deterministic, highest-accuracy signal in the crypto catalog that isn't already built. The Collector_Plan's #1 build position is correct.
+The "expected emission" filter is the only nuance. Many tokens have documented inflation schedules (e.g., staking rewards of 5% annually). The signal needs a per-token baseline: what's the expected totalSupply() growth rate? Minting above that rate is the anomaly. For tokens with no documented emission schedule, any supply increase is an anomaly.
+The difficulty of establishing per-token baselines is the reason the accuracy isn't 90%+. Some tokens have complex tokenomics with variable emission rates, rebase mechanisms, or algorithmic supply adjustment. For these tokens, distinguishing malicious minting from scheduled emission requires understanding the token's specific economic model — which is a per-token research task, not an automated detection.
+For the simplest and highest-impact variant: focus on tokens where totalSupply() increases by >10% in a single day with no documented mechanism. This is almost certainly malicious and doesn't require understanding complex tokenomics.
+What's Missing:
+1. totalSupply() polling — periodic on-chain call per monitored token
+2. Supply trajectory database — store historical totalSupply() values
+3. Emission schedule database — per-token expected inflation rate (can be bootstrapped as zero for unknown tokens, which catches the worst cases)
+4. Anomaly detection — supply increase exceeding expected emission by threshold
+5. Alert on >10% single-day supply increase (high-confidence, no per-token calibration needed)
+________________
+
+
+S080: Cross-DEX Liquidity Drain (NEW)
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S3 (Capital Commitment) — removing liquidity across multiple DEXs is capital commitment to exit; S2 (Infrastructure Response) — the DEX liquidity IS the trading infrastructure, draining it IS infrastructure collapse
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — cross-DEX drain is the coordinated version of single-pool rug pull
+	Original Ref
+	Collector_Plan Signal 80
+	Collector_Plan Tier
+	B (Next)
+	Scorer Mapping
+	defi_tvl_drop (D tier, 0.85x, crypto_project cluster) — captures aggregate TVL decline but not the cross-DEX coordination pattern
+	Collection Status
+	Not built
+	Directional
+	Yes — coordinated liquidity removal across multiple DEXs is unambiguously bearish
+	Estimated Accuracy
+	65–75%. Higher than the single-pool TVL drop (S060 at 50–60%) because the coordination across DEXs eliminates most benign explanations. A team removing liquidity from one pool might be rebalancing. A team removing liquidity from Uniswap AND Sushiswap AND PancakeSwap simultaneously is exiting.
+	Useful For:
+* Your comment: "although tier B, that's almost 'god mode'. No analyst does that by hand unless they are sweating bullets and their job is on the line. It's a rough analysis." The "god mode" characterization is apt — this signal detects the coordinated exit pattern that individual pool monitoring misses. If you only watch one DEX, you see one pool draining and might attribute it to rebalancing. If you watch all DEXs simultaneously, you see the coordinated pattern.
+* CT-05 (Rug Pull) — this is the execution stage of a sophisticated rug pull. The unsophisticated version drains one pool on one DEX. The sophisticated version drains liquidity from every available trading venue simultaneously, minimizing the window where anyone can sell before all liquidity is gone.
+* The defi_tvl_drop scorer entry (D tier, 0.85x) captures the aggregate result (TVL dropped). S080 captures the pattern (TVL dropped simultaneously across multiple venues). The pattern is more informative than the aggregate because it establishes coordination.
+* Implementation requires the same per-token DEX pool enumeration as S060 (Stablecoin Pair Ratio), extended to track TVL across DEXs rather than pair type within one DEX. The two signals share infrastructure: S060 tracks ratio within a DEX, S080 tracks level across DEXs.
+* Temporal coordination is the key metric: if liquidity is removed from Uniswap at block N and from Sushiswap at block N+2, the temporal proximity establishes coordination (same entity acting within seconds). If removals are days apart, it's more likely independent LP decisions.
+Validity Notes: Strong concept, moderate implementation complexity. The signal's strength comes from the coordination dimension — it's hard to explain away simultaneous liquidity removal from multiple venues as anything other than an exit.
+The main false positive scenario: multiple independent LPs who don't know each other all withdrawing simultaneously due to a common external trigger (market crash, negative news, competitor launch). This would look like coordinated drain but would actually be herding. Cross-referencing withdrawing wallet addresses (via S046 entity resolution) distinguishes true coordination (same entity) from herding (independent entities).
+The "god mode" characterization reflects the reality that manually monitoring a token's liquidity across 5+ DEXs simultaneously is operationally impractical for a human analyst. This is precisely the kind of signal that automation makes feasible — polling LP token balances or pool reserves across multiple DEX contracts simultaneously, computing cross-venue TVL, and detecting correlated declines.
+What's Missing:
+1. Per-token multi-DEX pool enumeration (which DEXs have pools for this token?)
+2. Cross-DEX TVL tracking (aggregate and individual pool TVL over time)
+3. Temporal correlation detection (liquidity removals within N blocks across DEXs)
+4. Entity resolution on withdrawing addresses (S046) — distinguish coordination from herding
+5. Alert threshold: TVL decline >30% across ≥2 DEXs within 1 hour = coordinated drain
+________________
+
+
+Batch 8 Summary
+ID
+	Name
+	Family
+	New/Variant
+	CP Tier
+	Est. Accuracy
+	Key Insight
+	S071
+	Team Wallet History Audit
+	F15
+	NEW
+	A
+	70–80%
+	Fraud registry is prerequisite for S059
+	S072
+	Domain/WHOIS (impl)
+	F15
+	Variant of S050
+	D
+	55–65%
+	LLM-assisted ticker→URL→WHOIS
+	S073
+	Proxy/Upgrade Key Analysis
+	F15
+	NEW
+	B
+	60–70%
+	Detects future rug capability, not just current
+	S074
+	Unlock Schedule (impl)
+	F12
+	Variant of S054
+	C
+	55–65%
+	Unified unlock calendar with S045
+	S075
+	Website Abandonment (impl)
+	F15
+	Sub-signal of S050
+	D
+	55–65%
+	Cron job + curl, contributes to abandonment trifecta
+	S076
+	Wash Trading Detection
+	F14
+	NEW
+	C
+	55–65%
+	Volume authenticity prerequisite for all volume signals
+	S077
+	First Buyer Advantage
+	F14
+	NEW
+	B
+	60–70%
+	Selectivity distinguishes insider from bot
+	S078
+	Stablecoin Shift (impl)
+	F14
+	Variant of S060
+	B
+	50–60%
+	Clearest mechanistic explanation in project
+	S079
+	Token Supply Inflation Trap
+	F15
+	NEW
+	S
+	75–85%
+	Simplest S-tier signal. Should have been built first.
+	S080
+	Cross-DEX Liquidity Drain
+	F14
+	NEW
+	B
+	65–75%
+	"God mode" — detects coordinated exit
+	Key Observations, Batch 8
+S079 (Supply Inflation) is the most embarrassing gap in the crypto pipeline. It's the simplest S-tier signal: one on-chain call (totalSupply()), one comparison (did it go up more than expected?), one conclusion (if yes, someone minted). It's deterministic, 75–85% accuracy, and was identified as #1 build priority in the Collector_Plan. The fact that it's still not built — while the system has 479 audit signals and elaborate scorer tiers — suggests a classic engineering prioritization inversion: complex impressive systems were built before simple critical ones.
+The Mint Function Threat Chain (S044 → S073 → S079) is the most powerful three-signal detection sequence in the crypto domain:
+1. S044: Does the contract have a mint function? (capability — 70–80%)
+2. S073: Can the admin add one via proxy? (access — 60–70%)
+3. S079: Was it actually used? (execution — 75–85%)
+Each stage increases confidence. All three together are near-certain fraud detection. Building S079 completes the chain (S044 already works). Building S073 adds the middle link that catches proxy-based delayed rugs.
+S071 (Fraud Registry) is the strategic data asset. It's not the highest-accuracy signal itself, but it's the prerequisite for the highest-accuracy signal (S059, Serial Deployer, 75–85%). The Collector_Plan correctly placed it before S059 in the build order. The OSINT harvesting approach (rugpull.wtf, tokensniffer, Reddit, Twitter) provides a viable bootstrap path. Over time, SignalDelta's own detections feed back into the registry, creating a growing competitive moat.
+S080 (Cross-DEX Drain) validates the "god mode" instinct. Your comment about no analyst doing this by hand is the core value proposition of automated multi-source monitoring. This signal is only possible with automation — a human can't simultaneously watch a token's liquidity across 5+ DEXs. This is what the product does that no analyst can.
+The revised crypto build order, incorporating all 8 batches:
+1. S062 (Verified check) — trivial, first-pass prerequisite
+2. S067 (LP Burn check) — trivial, first-pass prerequisite
+3. S079 (Supply Inflation) — simplest S-tier, one on-chain call
+4. S045/S063 (Lock Scanner) — moderate, A-tier
+5. S071 (Fraud Registry) — A-tier, prerequisite for S059
+6. S059/S064 (Serial Deployer) — S-tier, complex, highest accuracy
+7. S047/S066 (Exchange Inflow) — fix broken collector
+8. S073 (Proxy Admin) — B-tier, completes mint threat chain
+9. S044/S061 (Honeypot internal) — supplement existing GoPlus/De.Fi
+10. S080 (Cross-DEX Drain) — B-tier, "god mode"
+________________
+
+
+This completes the Collector_Plan signal series. All 80 signals across Batches 1–8 have been cataloged.
+Next available work: Cross-catalog summary, family coverage analysis, or beginning of Signal Catalog for signals beyond 80 (if additional brainstorm exists).
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

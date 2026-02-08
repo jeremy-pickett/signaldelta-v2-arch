@@ -1,0 +1,434 @@
+﻿SignalDelta Master Signal Catalog
+Batch 5: Signals S041–S050
+Version 1.0 DRAFT | February 7, 2026
+________________
+
+
+S041: Telegram/Discord Group Activity Velocity Shift
+Field
+	Value
+	Family
+	F16: Crypto: Social & Community Manipulation
+	Cascade Hint
+	S4 (Narrative Formation) primary — community channels ARE the crypto narrative layer; S0 (Private Cognition) secondary — admin silence may reflect private decision to abandon
+	Chain Affinity
+	CT-05 (Crypto Rug Pull), CT-10 (Pump-and-Dump)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 41
+	Scorer Mapping
+	social_metrics (E tier, 0.75x, alternative cluster), social_momentum_strong (D tier, 0.90x) — partial. The scorer captures social momentum broadly but not the velocity shift (rate-of-change of rate-of-change) or the admin silence variant specifically.
+	Collection Status
+	Partial — LunarCrush (LUNARCRUSH_API_KEY) and Santiment (SANTIMENT_API_KEY) configured. SIGNAL_COVERAGE.md flags LunarCrush as underutilized ("Only 2 collectors use it, could power more crypto social signals").
+	Directional
+	Partially — sudden silence is bearish (abandonment signal). Activity spike is ambiguous (could be genuine excitement or manufactured pump). The pattern of spike→silence→dump is directionally bearish.
+	Estimated Accuracy
+	50–60% for the admin silence variant specifically. The activity drop preceding abandonment is more predictive than activity spikes preceding pumps, because activity spikes have many non-informational causes (viral tweet, market rally, meme cycle) while admin silence is harder to explain benignly. The broader social velocity metric is 45–55% — noisy.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — admin silence is a leading indicator of rug pulls. When the team stops posting in their own community while the token continues trading, the information asymmetry is stark: the team knows they're leaving, the community doesn't. This is H6 (Concealment as Signal) applied to crypto: the absence of communication is the signal.
+* CT-10 (Pump-and-Dump) — the velocity spike followed by coordinated buying followed by dump is the CT-10 signature. The Telegram/Discord channel is the coordination mechanism. The velocity shift from normal→spike→silence→dump traces the cascade in real time.
+* The admin activity sub-dimension is the key differentiator: when admin posting frequency drops >80% from baseline while community posting continues, the team has disengaged from a project they're still profiting from. This specific metric isn't implemented in any current collector.
+* F16 (Crypto Social & Community Manipulation) is currently Not Built per the 20-family taxonomy. This signal would be one of the first F16 entries. Without F16, the cascade detector can't distinguish CT-05 and CT-10 from each other — both are crypto fraud but operate through different social coordination mechanisms.
+Validity Notes: The concept is strong for the admin silence variant. The broader social velocity shift is noisier. Crypto communities are inherently volatile — Telegram channel activity can swing 10x in a day based on a single CT tweet or a broad market move. The informational content is in persistent velocity changes, not spikes.
+The data access challenge is real: Telegram Bot API works for public channels, but many project channels are private or semi-private. Discord server tracking requires bot integration. LunarCrush and Santiment provide aggregated social metrics but not channel-level admin activity analysis.
+Bot/sybil contamination is a persistent problem. Manufactured social activity (bought Telegram members, bot posting) creates false positives. The signal needs a quality filter that weights unique organic posters more heavily than total message volume.
+What's Missing:
+1. Admin activity tracker — distinct from aggregate channel activity. Track named admin accounts' posting frequency independently.
+2. Channel-specific versus token-wide social metrics. LunarCrush provides token-level social aggregation; the signal needs project-channel-specific data.
+3. Bot detection filter. Even simple heuristics (account age, message uniqueness, posting pattern regularity) would substantially reduce false positives.
+________________
+
+
+S042: Insider Telegram Group Hierarchy Detection
+Field
+	Value
+	Family
+	F16: Crypto: Social & Community Manipulation
+	Cascade Hint
+	S0 (Private Cognition) — the existence of a tiered information structure IS the architectural evidence of intentional asymmetry
+	Chain Affinity
+	CT-10 (Pump-and-Dump), CT-05 (Crypto Rug Pull)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 42
+	Scorer Mapping
+	No direct mapping
+	Collection Status
+	Not built
+	Directional
+	Not directly — the existence of a VIP tier is a structural red flag, but doesn't indicate when the dump will happen. Combined with S041 (activity velocity), it becomes predictive: VIP tier exists + activity drops = imminent.
+	Estimated Accuracy
+	55–65% as a binary filter (projects with explicit insider tiers fail at higher rates than projects without). This isn't a signal that fires at a specific moment — it's a risk factor that modulates the weight of other crypto signals. Projects with documented VIP hierarchies should have their CT-05 and CT-10 probability priors elevated.
+	Useful For:
+* Structural risk scoring: this is a Tempo-layer signal, not an acute scoring signal. It establishes a baseline risk factor ("this project has a VIP tier, which elevates the prior probability of information-asymmetric behavior") that then amplifies acute signals (exchange inflow, liquidity removal) when they fire.
+* CT-10 (Pump-and-Dump) diagnostic: pump groups with explicit tiered access are the textbook mechanism. VIP members get the signal first, general members second, public last. The existence of the hierarchy IS the pump-and-dump infrastructure.
+* Cross-reference with S049 (Influencer Wallet-to-Content Timing, future batch): if VIP members' wallets show pre-content accumulation patterns, the VIP tier is functioning as an MNPI distribution channel.
+Validity Notes: This is more of a project risk classification than a traditional signal. The brainstorm frames it as detecting "whether valuable non-public information exists and is being selectively distributed." That's accurate, but the detection window is structural (at project assessment time) not temporal (at a specific moment). The existence of a paid alpha tier is observable at any time and doesn't change frequently.
+The edge case about VIP tiers providing "just technical analysis" is well-taken. Many paid crypto groups provide chart analysis, not inside information. Distinguishing TA services from MNPI distribution requires cross-referencing VIP member wallet activity with public content timing — which loops back to S049.
+At 55–65% as a binary filter, this is a useful risk modifier but not a standalone signal. It should be implemented as a Tempo context flag: project_has_vip_tier: true/false with a confidence weight on CT-05 and CT-10 priors.
+What's Missing: Project assessment database. Tracking which projects have VIP/tiered community structures requires manual or semi-automated survey of project Telegram/Discord configurations. This could be bootstrapped from CoinGecko project links — check each project's community channels for role structures and paid tiers.
+________________
+
+
+S043: GitHub Commit Velocity and Pattern Anomalies
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S1 (Institutional Process) — development activity IS the institutional process of building/maintaining the protocol; cessation of development IS the institutional process failing
+	Chain Affinity
+	CT-05 (Crypto Rug Pull), CT-07 (Credit Distress — crypto equivalent: protocol deterioration)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 43
+	Scorer Mapping
+	No direct mapping. The concept is referenced in the Collector_Plan as Signal 65 (GitHub repo lookup by coin) with the question "Can we look up repos by coin? Is that even realistic?"
+	Collection Status
+	Not built. CoinGecko/CoinMarketCap APIs return project links including GitHub URLs. The GitHub API provides commit data. The pipeline is technically feasible but not instrumented.
+	Directional
+	Yes — development cessation (commits drop to zero for >30 days) is bearish. Development acceleration is ambiguous (could be pre-launch activity or emergency patching).
+	Estimated Accuracy
+	55–65% for the abandonment variant (zero commits > 30 days). Development cessation while a token continues trading is a strong negative signal — it means the team has stopped working but the market hasn't noticed. The development content analysis (detecting liquidity drain functions, admin key additions) is higher accuracy (65–75%) but requires code review capability.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — development cessation is a leading indicator of abandonment. Combined with S041 (admin silence) and S050 (domain expiration), the three signals form an "abandonment trifecta" that diagnoses project death before the rug pull.
+* The content analysis dimension — detecting malicious code changes (added mint functions, removed sell restrictions, admin key modifications) — is the highest-value variant. A commit that adds an onlyOwner drain function to a previously function-limited contract is a near-certain rug pull precursor. This maps to S044 (Honeypot Detection) at the code analysis level.
+* F15 (Protocol & Contract Integrity) is partially active per the taxonomy. GitHub commit analysis would be one of the first F15 signals alongside the audit analyzer (which generates 479 signals from GoPlus/De.Fi).
+Validity Notes: The abandonment variant is conceptually strong. The code content analysis variant is even stronger but technically harder to implement. The Collector_Plan's Signal 65 flagged the feasibility question: "Can we look up GitHub repos by coin?"
+The answer is yes, partially:
+* CoinGecko API returns repos_url field for many (not all) listed coins
+* CoinMarketCap has similar fields
+* Many smaller tokens don't have GitHub repos or use private repos
+* Coverage is biased toward established projects (which are less likely to rug)
+This creates a selection bias problem: the projects most likely to rug pull are the ones least likely to have public GitHub repos. The signal has strong accuracy for projects with public repos, but limited coverage for the most dangerous projects.
+What's Missing:
+1. CoinGecko → GitHub URL mapping (can leverage existing CoinGecko mappings collector)
+2. GitHub API commit velocity tracker (simple: commits/week, unique contributors, last commit date)
+3. Code content analysis for malicious function detection (complex: requires Solidity/Vyper pattern matching)
+4. Private repo detection — flag projects that claim development activity but have no public repo as a separate risk factor
+________________
+
+
+S044: Smart Contract Honeypot/Trapdoor Detection
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S0 (Private Cognition) — the deployed contract reveals the deployer's intent at creation time; S2 (Infrastructure Response) — the contract IS the on-chain infrastructure
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — this signal IS the primary CT-05 early warning
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 44. Also Collector_Plan Signal 61 (Honeypot Detector, Tier S/A).
+	Scorer Mapping
+	audit_signals table (479 rows from audit_analyzer collector using GoPlus, De.Fi). This is the most populated crypto signal table in the system.
+	Collection Status
+	Active and producing. 479 signals generated. GoPlus API provides automated contract risk scoring. De.Fi API provides audit and risk analysis. The audit_analyzer collector is one of the few fully functional crypto collectors.
+	Directional
+	Yes — honeypot detection is unambiguously bearish. A contract with sell restrictions, hidden mint functions, or admin drain capabilities is a fraud apparatus.
+	Estimated Accuracy
+	70–80%. This is the highest-accuracy signal in the crypto domain and among the highest in the entire catalog. The reason is straightforward: honeypot contracts are deterministic — if the code contains a sell restriction, it WILL be used. It's not probabilistic inference about behavior; it's structural analysis of capabilities embedded in code. GoPlus and Token Sniffer report >90% accuracy for known honeypot patterns, though the false positive rate on novel patterns is higher.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — honeypot detection is the first line of defense. Before any on-chain behavior analysis, before any social signal, before any exchange flow signal, the contract code itself reveals whether a rug pull is architecturally possible. If the contract has a sell restriction, the token is a trap. Period.
+* The 479 existing signals make this the most mature crypto signal in the system. The audit_analyzer collector is working and generating data. This is the crypto equivalent of S006 (Form 4) in equities — the operational foundation.
+* Collector_Plan Signal 61 proposed extending this with Python-based static analysis of contract source code (regex pattern matching for honeypot functions). This would supplement GoPlus/De.Fi with internal analysis capability, reducing dependency on third-party APIs.
+* The proxy contract variant (mentioned in the Collector_Plan explanation of Signal 73) is the sophisticated evasion: malicious functionality hidden behind an upgradeable proxy pattern where the implementation can be swapped. Detecting proxy-based honeypots requires analyzing the proxy-implementation relationship, not just the surface contract.
+Validity Notes: This is the strongest signal in the crypto catalog and I'm assigning the highest accuracy estimate of any signal reviewed so far (70–80%). The foundation is simple: code analysis is deterministic. A contract either has a sell restriction or it doesn't. The probabilistic element is only in whether the function will be called (near-certain for honeypots) and whether novel evasion techniques defeat the pattern library (the evolving edge).
+The 479 signals represent strong production data. The collector should be expanded, not replaced. Enhancement paths:
+1. Broader EVM chain coverage (BSC, Polygon, Arbitrum, Base — not just Ethereum)
+2. Internal static analysis (per Collector_Plan Signal 61) to supplement GoPlus/De.Fi
+3. Proxy contract deep analysis (per Collector_Plan Signal 73)
+4. New contract deployment monitoring — flag every new token contract at deployment for immediate honeypot screening
+What's Missing: Multi-chain coverage expansion and proxy contract analysis are the main gaps. The core signal is working. This should be protected and expanded, not redesigned.
+________________
+
+
+S045: Liquidity Lock Status and Unlock Calendar
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S2 (Infrastructure Response) — liquidity locks are on-chain infrastructure; their status IS the infrastructure state
+	Chain Affinity
+	CT-05 (Crypto Rug Pull), CT-06 (Catalyst Anticipation — unlock date as known calendar event)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 45. Also Collector_Plan Signal 63 (Liquidity Lock Scanner, Tier A).
+	Scorer Mapping
+	unlock_anticipation (D tier, 0.90x, 72h half-life, crypto_project cluster) — covers token unlocks generally but not LP-specific lock expiration.
+	Collection Status
+	Partial — the scorer has unlock_anticipation but the underlying collector for LP-specific lock monitoring (UNCX, Team Finance) is not instrumented.
+	Directional
+	Yes — approaching unlock without re-lock is bearish. Lock extension is weakly bullish (team commits to staying). Lock modification (shortened duration) is strongly bearish.
+	Estimated Accuracy
+	60–70%. Liquidity lock expiration followed by liquidity removal is a well-documented rug pull pattern. The signal strength depends on what happens at unlock: if the team re-locks, neutral. If they remove liquidity immediately, the signal was correct. The 7-day pre-unlock window is the most informative period. Collector_Plan Signal 63 describes this as a "POTENTIAL RUGPULL or POTENTIAL INSIDER LIQUIDATION event" — that's accurate.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — the classic rug pull sequence is: deploy token → add liquidity → lock liquidity (to build trust) → wait for lock to expire → remove liquidity → disappear. S045 monitors the lock status and flags approaching expirations as pre-rug-pull windows.
+* Calendar-event analog (CT-06): the unlock date is a known event (like earnings). The information content is what the team will do at unlock, not when unlock happens. Pre-unlock positioning by other wallets may indicate leaked intent.
+* Lock modification detection is the highest-value sub-signal: if a team shortens a lock duration or adds emergency withdrawal capability, they're preparing to exit. This is H6 (Concealment as Signal) — the modification attempt reveals intent.
+* Pairs with S044 (Honeypot): if the contract has honeypot characteristics AND the liquidity lock is expiring, the convergence is near-certain rug pull.
+Validity Notes: Strong concept, well-validated by the crypto fraud ecosystem. The UNCX and Team Finance platforms exist specifically because liquidity locks are recognized as trust signals, and the expiration of those locks is recognized as a risk event. The infrastructure for monitoring lock status exists; what's missing is the integration into the SignalDelta collector pipeline.
+The Collector_Plan rated this Tier A and I concur. When combined with S044 (honeypot detection at Tier S/A), these two F15 signals form the core crypto fraud detection layer.
+What's Missing:
+1. UNCX / Team Finance API integration or direct contract monitoring for LP lock status
+2. Lock modification detection — track changes to lock duration, not just current expiration date
+3. Historical pattern database — what percentage of tokens with expiring locks experience >30% price decline within 14 days? This calibration data would validate the accuracy estimate.
+________________
+
+
+S046: Wallet Clustering and Entity Identification
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S0 (Private Cognition) — clustering reveals the true ownership structure that the deployer attempted to conceal; S3 (Capital Commitment) — clustered wallets holding concentrated positions represent actual capital commitment
+	Chain Affinity
+	CT-05 (Crypto Rug Pull), CT-10 (Pump-and-Dump), CT-09 (Activist Accumulation — crypto equivalent: whale accumulation disguised as distributed holding)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 46
+	Scorer Mapping
+	Partially covered by whale_frontrun (C tier, 1.10x, exchange_crypto cluster) which tracks large wallet behavior but not clustering/entity resolution.
+	Collection Status
+	Partial — Arkham Intelligence and Nansen provide entity labeling. 23,002 whale_transactions rows in raw data. But entity resolution (linking multiple wallets to single actor) is not systematically implemented.
+	Directional
+	Not directly — concentration discovery is a risk factor. It becomes directional when combined with movement: concentrated + moving toward exchange = bearish. Concentrated + accumulating = neutral (could be accumulation or consolidation for dump).
+	Estimated Accuracy
+	55–65% for the concentration-as-risk-factor application. The clustering analysis itself can be high accuracy (Nansen and Arkham report >80% entity resolution accuracy for labeled wallets), but the predictive value of discovered concentration is lower — concentrated holders don't always dump. The signal is strongest when concentration is newly discovered (i.e., the market believed the token was distributed but it's actually concentrated).
+	Useful For:
+* CT-05 and CT-10 shared diagnostic: both rug pulls and pump-and-dumps require concentrated control. Wallet clustering reveals whether the apparent holder distribution is real or manufactured. This is the foundational on-chain analytics capability that multiple other crypto signals depend on.
+* The Collector_Plan's insight is key: "Rug pull deployer on BSC → immediately flag on ALL EVM chains. Track fund flows across chains via bridges. Build multi-chain reputation graphs. Scammers often reuse addresses out of laziness/tooling." This cross-chain entity tracking is the multiplier that makes clustering analysis scale — once you identify a scammer's wallet network on one chain, you can flag their activity everywhere.
+* Foundation for S047 (Exchange Inflow): if clustered wallets start moving to exchanges, the entity-level inflow is more informative than the wallet-level inflow. Five wallets each depositing $200K is different if they're independent actors vs. one actor with five wallets.
+Validity Notes: The concept is well-validated by Arkham, Nansen, Chainalysis, and academic work on blockchain entity resolution. The challenge is operational: building and maintaining an entity resolution system is a significant engineering effort. The pragmatic approach is to leverage Arkham/Nansen labeling for known entities and build incremental clustering for unlabeled wallets using heuristics (shared gas source, temporal correlation, fund flow patterns).
+The cross-chain dimension (Collector_Plan's insight about BSC→all EVM chains) is the most valuable enhancement. Scammers do reuse addresses — it's one of the most reliable behavioral patterns in crypto fraud. A "known bad actor" database that persists across chains and projects would be a strategic asset for the entire crypto signal family.
+What's Missing:
+1. Entity resolution pipeline — even basic heuristics (shared gas source wallet, synchronized transaction timing) would provide coverage beyond Arkham/Nansen labels
+2. Cross-chain address reputation database (per Collector_Plan — this maps to future Signal 71, Team Wallet History Audit)
+3. Concentration metric computation — given entity resolution, calculate effective Gini coefficient adjusted for known entities. This is the data foundation for S058 (Token Concentration Gini, future batch).
+________________
+
+
+S047: Exchange Hot Wallet Inflow Anomaly (Pre-Dump Signal)
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S3 (Capital Commitment) — exchange deposit is the capital commitment to sell
+	Chain Affinity
+	CT-05 (Crypto Rug Pull) — team wallet→exchange→dump is THE rug pull sequence
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 47. Overlaps with S018 (Crypto Exchange Inflow) and Collector_Plan Signal 66 (Exchange Inflow Spike, Tier A).
+	Scorer Mapping
+	team_wallet_large_transfer (B tier, 1.30x, 72h half-life, crypto_project cluster), exchange_whale_deposit (D tier, exchange_crypto cluster), exchange_flow (C tier, 1.05x)
+	Collection Status
+	Partially broken — exchange_flow collector has errors per SIGNAL_COVERAGE.md despite 23,002 raw whale_transactions. team_wallet_large_transfer may be partially working via Arkham data.
+	Directional
+	Yes — team/whale→exchange is unambiguously bearish. This is the most directionally reliable signal in the crypto domain.
+	Estimated Accuracy
+	65–75% for labeled team wallet→exchange transfers specifically. When a project's own treasury wallet deposits tokens on Binance, the intent is overwhelmingly to sell. The accuracy drops to 50–60% for generic whale→exchange transfers because whales have diverse reasons for exchange deposits (market making, collateral, OTC). The team wallet variant is where the signal strength lives.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — this is the S3 stage of the rug pull cascade. The sequence is: honeypot contract deployed (S044, S0/S2) → liquidity lock expires (S045, S2) → team wallet moves tokens to exchange (S047, S3) → dump and disappear (S5). S047 fires at the S3 stage, giving a detection window of hours to days before the dump.
+* The team_wallet_large_transfer scorer entry at B tier (1.30x) is the highest-weighted crypto-specific signal in the scorer. This is appropriate — team wallet movements are among the most unambiguous on-chain signals.
+* The ">1% of circulating supply" threshold from the brainstorm and Collector_Plan is a good magnitude filter. Smaller transfers may be treasury management; transfers exceeding 1% of circulating supply are material.
+* Pairs critically with S046 (Wallet Clustering): if entity resolution identifies that 5 wallets are the same actor, and all 5 move tokens to exchange simultaneously, the entity-level transfer is 5x larger than any individual wallet-level transfer. Without entity resolution, the signal fragments into 5 smaller, less alarming transfers.
+Validity Notes: Among the strongest and most actionable crypto signals. The brainstorm and Collector_Plan both flag this as top-tier, and the scorer's B tier placement (1.30x) confirms it. The operational challenge is the broken exchange_flow collector — the data exists (23,002 whale_transactions) but the signal generation pipeline is disconnected.
+The Collector_Plan's Signal 66 (Exchange Inflow Spike) provides the more specific collector design: track transfers >1% of circulating supply from team/whale wallets to known CEX deposit addresses. The "known CEX deposit address" database is the persistent maintenance challenge — exchange addresses change and new exchanges emerge.
+What's Missing:
+1. Fix the exchange_flow collector — #1 crypto action item, unchanged from Batch 2
+2. CEX hot wallet address database maintenance
+3. Entity-aware transfer aggregation (requires S046 entity resolution)
+4. Magnitude calibration: is 1% of circulating supply the right threshold? Should it be relative to average daily volume instead?
+________________
+
+
+S048: CEX Listing Announcement Front-Running
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S3 (Capital Commitment) — pre-listing accumulation is capital commitment based on leaked listing information
+	Chain Affinity
+	CT-02 (Insider — exchange employee/project team), CT-04 (Media Leak — listing announcement is the narrative event)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 48
+	Scorer Mapping
+	No direct mapping. Related to smart_money_entry (C tier, 1.10x, exchange_crypto cluster) which detects sophisticated wallet accumulation patterns.
+	Collection Status
+	Not built
+	Directional
+	Yes — pre-listing accumulation is bullish (listing pump is the expected outcome)
+	Estimated Accuracy
+	60–70%. The Solidus Labs figure cited in the brainstorm (56% of listings show evidence of insider trading) is striking and well-documented. Coinbase's own internal investigation led to DOJ indictments of a former product manager in 2022. The pattern — DEX volume spike 3–7 days before listing announcement — is measurable and repeatable. The challenge is distinguishing genuine insider accumulation from speculative "listing rumor" trading.
+	Useful For:
+* CT-02 (Insider) in crypto context: exchange employees and project teams who know about upcoming listings are the informed actors. The listing is guaranteed to create buying pressure (new exchange users can now access the token), making pre-listing accumulation reliably profitable.
+* Retrospective detection is easy (compare DEX volume before listing announcement to baseline). Prospective detection is harder — you need to identify the abnormal DEX volume before you know a listing is coming, which requires monitoring all tokens for unexplained volume spikes and then checking if a listing follows.
+* Cross-reference with S041 (Telegram velocity): if social activity AND DEX volume spike simultaneously without a public catalyst, the convergence suggests coordinated insider activity ahead of an unannounced event.
+* The 300% DEX volume increase threshold from the brainstorm may be too low for micro-cap tokens (which regularly see 10x volume swings) and too high for established tokens (where a 50% increase might be significant). Threshold should be relative to the token's own historical volume distribution — a Tempo baseline question.
+Validity Notes: One of the better-validated crypto signals thanks to DOJ enforcement actions confirming the pattern. The Solidus Labs research provides population-level statistics (56% of listings) that support the concept. The main validity concern is the prospective detection problem: this signal is much more useful retroactively (confirming that a listing was front-run) than prospectively (predicting an upcoming listing from volume patterns alone).
+For IALD's purposes, the prospective variant matters more: detecting abnormal accumulation that might precede a listing allows the scoring engine to flag elevated asymmetry before the listing announcement. Even if the cascade chain type can't be confirmed until the listing is announced, the acute IALD Score reflects "something is happening in this token" in real time.
+What's Missing:
+1. DEX volume baseline per token (Tempo integration)
+2. Listing announcement database (Binance, Coinbase, OKX announcement feeds — these are public and scrapable)
+3. Pre-listing window definition — 7 days per brainstorm, but the optimal window may vary by exchange (Binance listing effect is larger than smaller exchanges)
+4. New wallet accumulation tracking — not just volume increase, but new wallets entering the token in the pre-listing window
+________________
+
+
+S049: Influencer Wallet-to-Content Timing Analysis
+Field
+	Value
+	Family
+	F10: Social & Influencer Coordination
+	Cascade Hint
+	S4 (Narrative Formation) — the content IS the narrative; S3 (Capital Commitment) — the pre-content positioning IS the capital commitment
+	Chain Affinity
+	CT-10 (Pump-and-Dump) — this signal IS the CT-10 mechanism for influencer-driven pumps
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 49. Extension of S011 (Social Media Influencer Pre-Positioning) with crypto-specific on-chain validation.
+	Scorer Mapping
+	influencer_positioning (E tier, 0.75x, 72h half-life, alternative cluster) — same as S011. S049 is the crypto-specific instrumentation of the same concept.
+	Collection Status
+	Partial — Twitter API (TWITTER_API_KEY) active, LunarCrush provides crypto_influencer and social_velocity metrics. On-chain wallet-to-identity linking is the bottleneck.
+	Directional
+	Yes — position→content→dump is bearish for the token holders who followed the content. The influencer's activity is directionally predictable: accumulate (bullish for them), publish (causes price rise), sell (bearish).
+	Estimated Accuracy
+	55–65% for known influencer wallets. This is higher than S011's equities variant (45–55%) because crypto provides on-chain confirmation of the wallet-content timing relationship. In equities, influencer positioning is disclosed with delay (13F) or not at all. In crypto, wallet activity is real-time on-chain. The accuracy bottleneck is wallet-to-identity coverage, not the detection logic.
+	Useful For:
+* This is S011 upgraded for crypto. The concept is identical (influencer positions before content), but the data infrastructure is fundamentally better: on-chain wallet monitoring provides real-time position tracking that equities can't match.
+* CT-10 (Pump-and-Dump) diagnostic: the influencer-driven pump is a CT-10 variant where the S4 (Narrative) stage is a single actor's content, not a media article. The cascade is S3 (influencer accumulates) → S4 (influencer publishes) → S3 again (followers buy in) → S5 (price impact, influencer sells).
+* The "undoxxed wallet" edge case from the brainstorm is the critical limitation. Top influencers use unlabeled wallets for their real positions and maintain "clean" public wallets. Wallet clustering (S046) is required to link undoxxed wallets to known identities.
+Validity Notes: Stronger than S011 because of crypto's on-chain transparency. The concept is well-validated by SEC enforcement (Kim Kardashian's EthereumMax settlement, BitBoy Crypto investigation) and academic research on social media influence on crypto prices (Ante 2023). The accuracy upgrade from S011 (45–55%) to S049 (55–65%) reflects the on-chain data advantage.
+The 50 influencer wallet curation suggested in S011's analysis would serve S049 directly. The same curated database covers both signals.
+What's Missing: Same as S011: curated influencer wallet database. For S049 specifically, the enhancement is on-chain transaction monitoring of those wallets in real-time, cross-referenced with social media posting timestamps. This requires a live pipeline connecting wallet monitoring → content timestamp detection → temporal correlation computation.
+________________
+
+
+S050: Project Website/Domain Activity Anomalies
+Field
+	Value
+	Family
+	F15: Crypto: Protocol & Contract Integrity
+	Cascade Hint
+	S2 (Infrastructure Response) — the website IS off-chain infrastructure; its degradation IS infrastructure failure
+	Chain Affinity
+	CT-05 (Crypto Rug Pull)
+	Original Ref
+	IALD_Signal_Brainstorm_Crypto_v1, Signal 50. Also Collector_Plan Signal 72 (Domain/WHOIS, referenced as "use Haiku or GPT instant to connect a crypto ticker to the official website and then WHOIS the website").
+	Chain Affinity
+	CT-05 (Crypto Rug Pull)
+	Scorer Mapping
+	No direct mapping
+	Collection Status
+	Not built
+	Directional
+	Yes — domain expiration, SSL lapse, WHOIS privacy change are all bearish
+	Estimated Accuracy
+	55–65% for domain expiration within 30 days + no renewal. Domain infrastructure abandonment is a strong abandonment signal because legitimate projects always maintain their web presence. The WHOIS privacy change (previously public → private) is a weaker variant — could be routine privacy hygiene or pre-abandonment concealment.
+	Useful For:
+* CT-05 (Crypto Rug Pull) "abandonment trifecta" — S043 (GitHub silence) + S041 (Telegram silence) + S050 (domain expiration) = multi-signal F15/F16 convergence that the project is dying. Each signal independently is moderate; together they're strong.
+* The Collector_Plan's insight about using an LLM to connect crypto ticker → official website → WHOIS is a practical implementation strategy. CoinGecko's project metadata includes website URLs. Automating the ticker→URL→WHOIS pipeline is feasible.
+* H6 (Concealment as Signal): WHOIS privacy change (from public to private registration) is a concealment action. The act of hiding the domain ownership is itself a signal, even if the underlying information (registrant identity) was already known.
+* Low collection cost: WHOIS lookups are cheap or free. SSL certificate transparency logs are public. Domain expiration checking is trivial. This is a high-signal-per-dollar signal.
+Validity Notes: Valid, easy to implement, moderate accuracy. The brainstorm rated the Collector_Plan variant as "Tier D at best" for the basic domain lookup, but the domain expiration within 30 days without renewal variant is stronger than Tier D — I'd place it at C tier. The distinction is between static domain status (D tier: "is this domain registered?") and dynamic domain trajectory (C tier: "is this domain about to expire without renewal?").
+The SSL certificate lapse variant is also practical: Certificate Transparency logs are public (crt.sh), and detecting a certificate that isn't being renewed is mechanically simple. Legitimate projects auto-renew SSL certificates; abandoned projects let them lapse.
+What's Missing:
+1. CoinGecko project URL → domain registration mapping
+2. WHOIS monitoring for domain expiration and registration changes
+3. SSL certificate monitoring via Certificate Transparency logs
+4. Uptime monitoring (simple HTTP checks on project website — if it returns 500/404 for >7 days, the project may be dead)
+This is a low-cost, high-leverage build. The data is free or nearly free, the engineering is straightforward, and it contributes evidence to the F15 family and the CT-05 "abandonment trifecta."
+________________
+
+
+Batch 5 Summary
+ID
+	Name
+	Family
+	Status
+	Directional
+	Est. Accuracy
+	Priority Gap
+	S041
+	Telegram/Discord Velocity Shift
+	F16
+	Partial
+	Partial
+	50–60%
+	Admin activity tracker
+	S042
+	Insider Group Hierarchy Detection
+	F16
+	Not built
+	No (risk factor)
+	55–65%
+	Project assessment DB
+	S043
+	GitHub Commit Velocity
+	F15
+	Not built
+	Yes (bearish)
+	55–65%
+	CoinGecko→GitHub mapping
+	S044
+	Honeypot/Trapdoor Detection
+	F15
+	Active ✓ (479 signals)
+	Yes (bearish)
+	70–80%
+	Multi-chain expansion
+	S045
+	Liquidity Lock Status
+	F15
+	Partial
+	Yes (bearish)
+	60–70%
+	UNCX/Team Finance integration
+	S046
+	Wallet Clustering/Entity ID
+	F14
+	Partial
+	No (risk factor)
+	55–65%
+	Entity resolution pipeline
+	S047
+	Exchange Hot Wallet Inflow
+	F14
+	Broken
+	Yes (bearish)
+	65–75%
+	Fix exchange_flow collector
+	S048
+	CEX Listing Front-Running
+	F14
+	Not built
+	Yes (bullish)
+	60–70%
+	Listing announcement DB
+	S049
+	Influencer Wallet-Content Timing
+	F10
+	Partial
+	Yes
+	55–65%
+	Influencer wallet DB
+	S050
+	Website/Domain Anomalies
+	F15
+	Not built
+	Yes (bearish)
+	55–65%
+	Low-cost build
+	Key Observations, Batch 5
+S044 (Honeypot Detection) is the crypto crown jewel. 479 signals, 70–80% accuracy, active and producing. This is the crypto equivalent of S006 (Form 4) in equities — the operational backbone. Everything else in the crypto pipeline is either broken, partial, or unbuilt. S044 stands alone as a functioning, high-accuracy crypto signal. Protect it. Expand it to more chains.
+The CT-05 (Rug Pull) detection package is taking shape. S044 (honeypot) → S045 (liquidity lock) → S047 (exchange inflow) → S041 (social silence) → S050 (domain death). This is a five-signal cascade that traces rug pull preparation from contract deployment through abandonment. Three of the five involve F15 (Protocol & Contract Integrity), with F14 (On-Chain Capital Flow) and F16 (Social Manipulation) providing cross-family Agreement. The cascade chain type CT-05's diagnostic signature — "Only crypto families fire, S1/S2/S4 dark" — would light up as these signals converge.
+S047 (Exchange Inflow) remains the highest-impact fix. Third consecutive batch where this appears as the #1 crypto action item. 23,002 raw whale transactions, broken collector, zero signals. The team_wallet_large_transfer scorer entry at B tier (1.30x) is waiting for data. Fix this.
+F16 (Social & Community Manipulation) is Not Built. S041 and S042 would be the first entries. Without F16, the cascade detector cannot distinguish CT-05 (Rug Pull, team-driven) from CT-10 (Pump-and-Dump, community-driven) — both appear as "crypto fraud" but with different social coordination mechanisms. F16 provides the S4 evidence that differentiates them.
+S050 (Domain Anomalies) is the best cost-to-value ratio in the batch. Free data (WHOIS, Certificate Transparency), simple engineering (HTTP checks + domain expiration monitoring), moderate accuracy (55–65%), and it contributes F15 family evidence. The Collector_Plan rated the basic variant as Tier D, but the trajectory variants (domain expiring without renewal, SSL lapsing without replacement) are C tier. This should be built early as a cheap F15 family diversifier.
+The "abandonment trifecta" (S041 + S043 + S050) is a natural product demo. GitHub goes silent → Telegram admins stop posting → domain expires. Three independent signals across F15 and F16 converging on the same project. Each individually is moderate confidence; together they're compelling. When combined with S044 (honeypot detection) and S045 (lock expiration), you have a 5-signal CT-05 narrative that's intuitive to explain to a non-technical audience.
+________________
+
+
+Ready for Batch 6: Signals S051–S060 (Crypto Brainstorm 51–60)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

@@ -1,0 +1,421 @@
+﻿SignalDelta Master Signal Catalog
+Batch 1: Signals S001–S010
+Version 1.0 DRAFT | February 7, 2026
+________________
+
+
+Catalog Conventions
+Each signal entry carries the following metadata:
+Field
+	Description
+	ID
+	S-prefixed three-digit number. Canonical across all documents.
+	Name
+	Human-readable name
+	Family
+	One of the 20 locked signal families (F01–F20)
+	Cascade Hint
+	Which cascade stage(s) this signal most likely contributes evidence for
+	Cascade Chain Affinity
+	Which chain type(s) this signal is most diagnostic for
+	Original Ref
+	Where this signal was first brainstormed (document + number)
+	Scorer Mapping
+	Which signal(s) in iald_scorer_v3.py implement this concept
+	Collection Status
+	Active / Partial / Not Built / Blocked
+	Directional
+	Whether the signal carries directional (bullish/bearish) information
+	Estimated Accuracy
+	Rough accuracy range based on available evidence and literature
+	Useful For
+	Operational hints — what an analyst or Conductor might do with this signal
+	Validity Notes
+	Conceptual integrity check — does this signal actually measure what it claims?
+	________________
+
+
+S001: Prediction Market New Account Concentration
+Field
+	Value
+	Family
+	F17: Prediction & Belief Markets
+	Cascade Hint
+	S3 (Capital Commitment)
+	Chain Affinity
+	CT-02 (Insider), CT-06 (Earnings Anticipation), CT-10 (Pump-and-Dump)
+	Original Ref
+	Signal_Collectors_1, Signal 01
+	Scorer Mapping
+	prediction_divergence (partial overlap — scorer doesn't isolate new accounts)
+	Collection Status
+	Partial — Polymarket wallet age not currently tracked
+	Directional
+	Yes — position direction is observable
+	Estimated Accuracy
+	45–55%. High noise from retail conviction betting, especially on sports and political events. For corporate/regulatory events on low-liquidity markets, likely higher (55–65%).
+	Useful For:
+* Early warning on binary corporate events (M&A completion, FDA approval) where prediction market liquidity is thin and a concentrated bet moves the price significantly
+* Cross-validation with F04 (Options) — if new Polymarket accounts and options sweeps point the same direction on the same catalyst, Agreement strengthens substantially
+* CT-10 (Pump-and-Dump) identification — new accounts taking large positions on low-liquidity crypto prediction markets is a potential manipulation setup
+Validity Notes: The core assumption — that actors with genuine inside information create fresh accounts — is partially validated by blockchain analysis showing wallet-age correlations with outcome accuracy on Polymarket. However, the signal has a substantial base rate problem: many new accounts are simply new users with no information advantage, and "conviction betting" on tribal events (elections, sports) creates noise. The signal is strongest on obscure corporate events where only informed actors would bother creating fresh accounts to take positions. Signal quality degrades rapidly on high-profile public events.
+The Kalshi side is cleaner (KYC-required, less wash trading) but lower volume. Polymarket offers more data but more noise.
+What's Missing: Scorer currently tracks prediction market divergence but doesn't isolate new-account concentration specifically. A dedicated collector that tracks wallet creation date relative to position size on Polymarket would be needed to fully instrument this signal.
+________________
+
+
+S002: Prediction Market Probability Divergence from Peer Events
+Field
+	Value
+	Family
+	F17: Prediction & Belief Markets
+	Cascade Hint
+	S3 (Capital Commitment)
+	Chain Affinity
+	CT-01 (Regulatory), CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 02
+	Scorer Mapping
+	prediction_divergence
+	Collection Status
+	Active — Polymarket + Kalshi collected
+	Directional
+	Yes — divergence direction indicates which event has localized information
+	Estimated Accuracy
+	50–60%. Peer event selection is the critical variable. Well-selected structural peers (same sector earnings, same regulatory jurisdiction) yield higher accuracy. Poorly selected peers (superficially similar but structurally different) yield noise.
+	Useful For:
+* Identifying which specific event in a category is being traded on private information, when multiple similar events exist
+* Regulatory cascade (CT-01) detection — if one company's "will they be investigated?" market moves while peers hold steady, localized enforcement information may be leaking
+* Tempo integration — divergence relative to the historical divergence range between the same peer events is more informative than absolute divergence
+Validity Notes: This is conceptually strong. The peer-divergence approach controls for market-wide sentiment shifts and isolates event-specific information. The main challenge is peer selection — what counts as a "structurally similar" event? Same industry earnings are natural peers. Same-jurisdiction regulatory events are reasonable peers. But cross-domain "structural similarity" is subjective and introduces analyst judgment.
+The 15-percentage-point threshold from the original brainstorm may be too aggressive for well-traded markets (where 5pp divergence is significant) and too lenient for illiquid markets (where 20pp swings are noise). Thresholds should be calibrated to the specific market's historical volatility.
+What's Missing: The scorer implements basic prediction divergence but doesn't formalize the peer-event matching logic. A Tempo-like baseline for prediction market probability distributions would strengthen this significantly.
+________________
+
+
+S003: Options Volume-to-Open Interest Spike
+Field
+	Value
+	Family
+	F04: Options Market Structure
+	Cascade Hint
+	S3 (Capital Commitment)
+	Chain Affinity
+	CT-02 (Insider), CT-03 (Deal Leakage), CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 03
+	Scorer Mapping
+	options_volume_spike, options_volume_spike_extreme, options_volume_spike_strong, options_volume_spike_moderate
+	Collection Status
+	Active — Unusual Whales, but raw data sparse (102 rows). Polygon provides underlying data.
+	Directional
+	Yes — call-heavy vs. put-heavy volume indicates direction
+	Estimated Accuracy
+	55–65%. One of the most studied signals in academic literature (Easley, O'Hara, and Srinivas 1998; Pan and Poteshman 2006). OTM options volume preceding corporate events has consistently shown above-baseline predictive value. Accuracy degrades in high-VIX environments where speculative volume is elevated across the board.
+	Useful For:
+* Core S3 capital commitment evidence — this is the canonical "someone is betting with leverage on a near-term move"
+* Extremely useful for CT-03 (Deal Leakage) — OTM call volume on takeover targets is the classic pre-M&A signal
+* CT-06 (Earnings Anticipation) — pre-earnings options volume spikes are common and well-documented
+* Magnitude scaling is critical here: a 2x volume/OI ratio is different from a 10x ratio. The scorer's extreme/strong/moderate decomposition is correct.
+Validity Notes: This is one of the most validated signals in the academic and practitioner literature. The SEC's own enforcement pattern reveals that options flow is where they most frequently detect insider trading after the fact. The challenge isn't validity — it's false positive rate. Options volume spikes happen for many non-informational reasons: hedging, structured product activity, dealer gamma management, retail speculation. The decomposition into extreme (>10x), strong (>5x), and moderate (>2x) thresholds is the right approach, but the thresholds themselves are calibration parameters.
+The scorer has four signals implementing this single concept at different magnitude thresholds plus the base signal. That's five entries for one underlying phenomenon, which is correct architecture — it lets the magnitude cascade contribute to score while keeping each individual signal's weight honest.
+What's Missing: Raw data is sparse (102 rows per SIGNAL_COVERAGE.md). The Polygon integration needs tuning. This is flagged in the coverage doc as needing more options data. Priority: HIGH — this is a core F04 family signal.
+________________
+
+
+S004: Options Sweep Aggression
+Field
+	Value
+	Family
+	F04: Options Market Structure
+	Cascade Hint
+	S3 (Capital Commitment)
+	Chain Affinity
+	CT-02 (Insider), CT-03 (Deal Leakage)
+	Original Ref
+	Signal_Collectors_1, Signal 04
+	Scorer Mapping
+	options_sweep_whale, options_sweep_institutional
+	Collection Status
+	Active — Unusual Whales
+	Directional
+	Yes — sweep direction (call vs. put, at ask vs. at bid) is directional
+	Estimated Accuracy
+	55–65%. Sweep aggression — paying the ask across multiple exchanges simultaneously — is a stronger signal than passive volume because it reveals urgency. The urgency premium (paying the spread) indicates the trader values speed over price, which is consistent with time-sensitive information. Academic evidence supports sweep classification adding ~5–10% accuracy over volume alone.
+	Useful For:
+* Distinguishing informed urgency from passive hedging — sweeps indicate someone who needs the position now, not someone managing a book
+* Combined with S003 (volume spike), sweeps within a volume spike narrow the interpretation toward informed flow
+* CT-02 (Insider) — insiders with imminent corporate event knowledge will sweep rather than work orders passively
+* Magnitude scaling by dollar value is correct: a $5M sweep is qualitatively different from a $100K sweep
+Validity Notes: Solid conceptual basis. The distinction between sweep and non-sweep execution is well-understood in market microstructure literature. The assumption that urgency implies information is directionally correct but not absolute — market makers also sweep when managing inventory. The magnitude threshold ($100K minimum) helps filter out noise from retail sweep-style orders on high-volume underlyings.
+The correlation cluster with S003 is appropriately handled — both are in the options cluster, so the second signal from the same cluster gets a 50% discount. This prevents double-counting while still allowing the combination to add marginal conviction.
+What's Missing: Could benefit from time-of-day analysis. Sweeps in the first and last 30 minutes of trading have different information content than mid-day sweeps.
+________________
+
+
+S005: Dark Pool Block Trade Clustering
+Field
+	Value
+	Family
+	F05: Dark Pool & Off-Exchange Execution
+	Cascade Hint
+	S3 (Capital Commitment), secondary S2 (Infrastructure Response)
+	Chain Affinity
+	CT-03 (Deal Leakage), CT-09 (Activist Accumulation)
+	Original Ref
+	Signal_Collectors_1, Signal 05
+	Scorer Mapping
+	dark_pool_clustering, dark_pool_accumulation_large, dark_pool_accumulation_medium, dark_pool_block_trade, dark_pool_timing_anomaly
+	Collection Status
+	BLOCKED — Missing FINRA API key (HIGH priority in SIGNAL_COVERAGE.md)
+	Directional
+	Partially — accumulation vs. distribution can sometimes be inferred from print-side reporting, but not always
+	Estimated Accuracy
+	50–60% estimated. Academic evidence (Comerton-Forde and Putninš 2015) shows dark pool prints carry information, but the public data (FINRA ATS transparency, delayed) is substantially degraded compared to institutional feeds. With institutional-grade dark pool data, accuracy would be higher (60–70%).
+	Useful For:
+* CT-09 (Activist Accumulation) — the signature of activist accumulation is persistent same-direction dark pool prints over days/weeks. This is the primary detection mechanism for pre-13D accumulation.
+* CT-03 (Deal Leakage) — M&A target accumulation frequently uses dark pools to hide intent. Block clustering in a name with simultaneous options activity (S003/S004) is high-Agreement evidence.
+* The timing anomaly sub-signal (dark pool prints at unusual hours or in unusual size patterns) adds Infrastructure Response (S2) evidence — market structure is being used in anomalous ways.
+Validity Notes: The concept is unambiguously valid. The challenge is entirely operational: FINRA ATS data is aggregated and delayed, so the public-data version of this signal is substantially weaker than the institutional version. Getting the FINRA API key (flagged as HIGH priority in the coverage doc) is the single most impactful unblock for F05. Until then, this family has 5 defined signals and zero data.
+The accumulation-vs-distribution determination from public data is noisy. Dark pool prints don't always reveal buyer/seller identity. The scorer appropriately splits this into clustering (non-directional), accumulation (partially directional), block trade (size-focused), and timing anomaly (temporal pattern) — acknowledging that different aspects of dark pool activity carry different information types.
+What's Missing: FINRA API key. This is the #1 action item in the coverage document. Everything else about this signal family is designed and ready.
+________________
+
+
+S006: SEC Form 4 Filing Timing Anomaly
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior
+	Cascade Hint
+	S1 (Institutional Process) primary, S3 (Capital Commitment) primary
+	Chain Affinity
+	CT-02 (Insider), CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 06
+	Scorer Mapping
+	form4_timing, insider_ceo_trade, insider_cfo_trade, insider_cluster, insider_director_cluster, insider_options_exercise_early, insider_all_cash_sale, insider_post_quiet_period, insider_trading, insider_gift_timing, insider_family_trade, insider_10b5_deviation
+	Collection Status
+	Active — SEC EDGAR. 1,761 insider trades, 1,738 timing analysis rows, 24 cluster signals generated.
+	Directional
+	Yes — buy vs. sell, exercise-and-hold vs. exercise-and-sell
+	Estimated Accuracy
+	60–70%. Insider trading as a predictor of abnormal returns is one of the most robust findings in finance (Lakonishok and Lee 2001, Seyhun 1998). CEO/CFO trades in particular show strong predictive power. The timing anomaly (cluster of insiders trading within a narrow window) is additive: coordinated insider activity is more predictive than individual trades.
+	Useful For:
+* Core CT-02 (Insider Cascade) diagnostic — Form 4 data is the institutional record of insider trading
+* The filing itself is S1 evidence (institutional process — the SEC filing is the institutional workflow output). The transaction it reports is S3 evidence (capital commitment — money moved).
+* Cluster detection (≥3 insiders same-direction within 5 days) is significantly more predictive than individual trades
+* 10b5-1 deviation (S007, next) extends this concept to plan modification patterns
+* Magnitude scaling by dollar value is important: CEO selling $100K of a $50B company is routine. CEO selling $50M is not.
+* The "all-cash sale" sub-signal isolates the most informative transaction type — selling for cash rather than exercising and holding or gifting
+Validity Notes: This is the single most decomposed signal in the scorer — 12 sub-signals from one brainstorm concept. That level of decomposition is justified because insider trading data is rich and multi-dimensional. A CEO purchase means something different from a director sale, which means something different from an early option exercise, which means something different from a spousal trade. The scorer correctly separates these.
+Collection is active and well-populated (1,761 trades). The signal generation pipeline is working (24 cluster signals detected). This is one of the most mature signal families in the system.
+One validity concern: insider trades filed under 10b5-1 plans are theoretically uninformative (pre-planned). But research shows 10b5-1 plans are routinely gamed. S007 addresses this directly.
+What's Missing: Nothing critical. This is a mature, well-instrumented signal. Enhancement opportunities include: more granular magnitude thresholds, cross-reference with S003 (options activity around insider trade dates), and Tempo baseline integration for per-security insider trading norms.
+________________
+
+
+S007: 10b5-1 Plan Modification Patterns
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior
+	Cascade Hint
+	S1 (Institutional Process), S0 (Private Cognition — weak)
+	Chain Affinity
+	CT-02 (Insider)
+	Original Ref
+	Signal_Collectors_1, Signal 07
+	Scorer Mapping
+	insider_10b5_deviation
+	Collection Status
+	Active — SEC EDGAR (Form 4 amendments, 10-K/10-Q disclosures)
+	Directional
+	Partially — plan termination before negative news is bearish; plan modification accelerating sales is bearish. But the directionality isn't always clear from the filing alone.
+	Estimated Accuracy
+	55–65%. Academic research (Henderson et al. 2021, Jagolinzer 2009) demonstrates that 10b5-1 plans provide legal cover but are systematically associated with subsequent abnormal returns, particularly when plans are terminated, modified, or adopted with short cooling-off periods. The SEC's 2023 rule changes (requiring cooling-off periods and limiting modifications) may have reduced signal value for plans adopted post-rule, but the gaming mechanism has likely shifted rather than disappeared.
+	Useful For:
+* Detecting the "legal insider trading loophole" — 10b5-1 plans that are adopted, modified, or terminated in patterns that suggest informational gaming
+* Particularly valuable when combined with S006 cluster detection: if a CEO terminates their 10b5-1 plan and other insiders are cluster-trading in the same window, the convergence is powerful
+* S0/S1 boundary evidence — plan modification reveals that the insider's expectations changed, which may reflect S0 (Private Cognition) transitioning to actionable behavior
+* Useful for Tempo: establishing a per-company baseline for 10b5-1 plan modifications and then flagging deviations
+Validity Notes: The concept is well-validated academically, but the practical implementation challenge is data quality. 10b5-1 plan adoptions and terminations are disclosed in multiple places (Form 4 footnotes, 10-K/10-Q boilerplate, 8-K Item 5.08 under new rules), and extracting structured data from these heterogeneous disclosures is harder than parsing the transactions themselves.
+The 2023 SEC rule changes are a double-edged sword: they require more disclosure (making detection easier) but impose cooling-off periods (making gaming harder — in theory). In practice, sophisticated actors will optimize within the new constraints.
+What's Missing: The scorer has insider_10b5_deviation but the underlying extraction logic for plan-level metadata (adoption date, modification history, cooling-off period compliance) may not be fully instrumented. This is a data extraction challenge more than a conceptual one.
+________________
+
+
+S008: Short Interest Rate-of-Change Spike
+Field
+	Value
+	Family
+	F06: Short Selling & Borrow Infrastructure
+	Cascade Hint
+	S2 (Infrastructure Response) primary, S3 (Capital Commitment) secondary
+	Chain Affinity
+	CT-01 (Regulatory), CT-07 (Credit Distress), CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 08
+	Scorer Mapping
+	short_interest_spike, short_velocity_divergence, short_persistence, short_intensity_ratio, exempt_short_ratio, cohort_short_correlation, short_interest, short_covering, ftd_pattern
+	Collection Status
+	BLOCKED — Missing FINRA API key (HIGH priority). 9 scorer signals defined, zero data.
+	Directional
+	Yes — short interest increases are bearish; decreases (covering) are bullish
+	Estimated Accuracy
+	55–65%. Short interest as a predictor of negative returns is well-documented (Desai et al. 2002, Asquith, Pathak, and Ritter 2005). The rate-of-change (velocity) is more informative than the absolute level. Short sellers are generally more sophisticated and better-informed than long buyers due to the asymmetric risk profile (unlimited loss potential requires conviction).
+	Useful For:
+* CT-07 (Credit Distress) — short interest spikes are often the first visible signal in credit deterioration cascades, preceding CDS spread widening and rating downgrades
+* CT-01 (Regulatory) — enforcement actions are frequently preceded by short interest increases from actors who learn of investigations before public disclosure
+* Cohort short correlation (cohort_short_correlation) is particularly powerful: if short interest spikes in one name but not its peers, the information is company-specific. If the entire cohort shorts up, it's sector-level
+* The velocity divergence sub-signal (short interest moving opposite to price) is a strong conviction indicator — someone is shorting into a rally, which requires high conviction
+* Straddles both S2 (borrow infrastructure) and S3 (capital commitment) because short selling requires both borrowing (infrastructure) and selling (capital commitment)
+Validity Notes: Conceptually rock-solid. The short seller information advantage is one of the most consistent findings in empirical finance. The main challenge is data timeliness: FINRA short interest is reported bi-monthly with a delay. The scorer's 9 signals represent a comprehensive decomposition of what can be extracted from this delayed data — velocity, persistence, intensity ratio, exempt short ratio (market maker activity), cohort correlation, and FTD patterns.
+The FTD pattern signal (related but distinct — fail-to-deliver data from SEC, published semi-monthly) provides settlement-layer corroboration. Persistent FTDs suggest either naked shorting or operational stress. This is equities brainstorm Signal 36 (S036 in future numbering).
+What's Missing: FINRA API key. This is tied with S005 (dark pool) as the #1 operational blocker. 9 signals are defined and the scorer logic is written — it's purely a data access problem. The coverage doc lists this as HIGH priority immediate action item.
+________________
+
+
+S009: Analyst Estimate Revision Clustering
+Field
+	Value
+	Family
+	F07: Analyst & Sell-Side Networks
+	Cascade Hint
+	S4 (Narrative Formation) primary, S1 (Institutional Process) secondary
+	Chain Affinity
+	CT-01 (Regulatory — if analysts are reacting to same information), CT-04 (Media Leak — if analysts cluster after leak), CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 09
+	Scorer Mapping
+	analyst_clustering, analyst_firm_clustering, analyst_upgrade_cluster, analyst_upgrade_wave, analyst_herding_reversal, analyst_ratings
+	Collection Status
+	Active — FMP Analyst Actions (v3.5 upgrade from Benzinga consensus). Working with individual analyst-level data.
+	Directional
+	Yes — upgrade clusters are bullish, downgrade clusters are bearish
+	Estimated Accuracy
+	50–60%. Analyst revision clustering has moderate predictive value. The challenge is distinguishing informed clustering (analysts share a private information source) from herding (analysts copy each other's public work). The FMP upgrade to individual analyst-level data (v3.5) enables better detection of bulge-bracket firm clustering, which is more likely to reflect shared institutional information channels than herding.
+	Useful For:
+* CT-06 (Earnings Anticipation) — analyst revision waves 5–10 days before earnings often reflect channel checks and management guidance tone that isn't fully public
+* The bulge-bracket clustering sub-signal (analyst_firm_clustering) is the highest-value variant: when Goldman, Morgan Stanley, and JP Morgan all revise in the same direction within a week, without a public catalyst, the probability that they share an information source is high
+* The herding reversal sub-signal (analyst_herding_reversal) detects the opposite — when consensus herds in one direction and then reverses, it may indicate the original herding was wrong and one analyst broke ranks with better information
+* Pairs well with F09 (Narrative/Media) — if analyst revisions precede media coverage, the information flow is analyst→media (normal). If media precedes analyst revisions, the flow is inverted (CT-04, Media Leak)
+Validity Notes: This is a well-studied but noisy signal. Analyst consensus revisions have modest individual predictive value (Gleason and Lee 2003), but the clustering and timing dimensions add information. The v3.5 upgrade to individual analyst-level data from FMP is a significant improvement over consensus-level data — it enables detection of who revised, when, and whether the revising analysts share institutional affiliations or information channels.
+The key validity question is whether analyst revisions represent independent information or correlated herding. The correlation cluster architecture handles this partially — all analyst signals are in the analyst cluster, so they get 50% discount after the first. But the deeper question is whether F07 (Analyst) is truly independent from F09 (Narrative) — analysts and journalists sometimes share sources. The family classification treats them as independent, which is an approximation.
+What's Missing: The collection pipeline is active and the FMP integration is the best available data source for this signal. Enhancement opportunities: NLP analysis of analyst note language (not just the rating change), non-deal roadshow timing correlation, and analyst accuracy tracking per individual.
+________________
+
+
+S010: Earnings Whisper Divergence
+Field
+	Value
+	Family
+	F17: Prediction & Belief Markets
+	Cascade Hint
+	S3 (Capital Commitment) — whisper numbers represent staked belief
+	Chain Affinity
+	CT-06 (Earnings Anticipation)
+	Original Ref
+	Signal_Collectors_1, Signal 10
+	Scorer Mapping
+	whisper_divergence, earnings_surprise_anticipation
+	Collection Status
+	Active — Estimize, FMP calendars
+	Directional
+	Yes — whisper above consensus is bullish, below is bearish
+	Estimated Accuracy
+	50–58%. Whisper numbers are a weak-to-moderate signal individually. The divergence from sell-side consensus is the informative dimension, not the whisper number itself. Research (Bagnoli et al. 1999) shows whisper numbers contain information beyond consensus, but the effect is modest and has likely diminished as whisper aggregation has become more widely accessible.
+	Useful For:
+* CT-06 (Earnings Anticipation) — this is almost exclusively an earnings-event signal. The whisper divergence is most useful in the 72 hours before earnings when the private-channel expectations have had time to circulate but haven't yet been reflected in consensus
+* Combined with S003 (Options Volume) and pre-earnings activity, whisper divergence helps triangulate: options saying one thing, analysts saying another, whisper saying a third — the disagreement pattern itself is informative
+* Family assignment to F17 (Prediction & Belief Markets) rather than F07 (Analyst) is deliberate: whisper numbers are crowdsourced staked belief (Estimize users stake reputation), not analyst estimates. This means whisper divergence contributes Agreement evidence independently from analyst clustering
+Validity Notes: This is the weakest signal in the first batch, and it's appropriately tiered at C (1.10x weight) in the scorer. The original brainstorm rated it "Weak-Moderate" and that assessment holds. The concept is valid — private-channel expectations do carry information beyond public consensus — but the signal-to-noise ratio is low and has likely degraded as these platforms have become more popular and more polluted with uninformed participants.
+The earnings_surprise_anticipation v3.5 sub-signal (FMP-derived, measuring pre-earnings options positioning relative to consensus) is a stronger variant that captures the same concept through different data: the options market's implied earnings move vs. consensus expectations.
+One concern: placing this in F17 (Prediction Markets) alongside Polymarket/Kalshi data. Estimize is structurally different from Polymarket — it aggregates estimates, not binary bets. The family assignment is defensible (both are staked belief aggregation) but the independence assumption with options-based earnings positioning (F04) should be scrutinized — options traders and Estimize contributors may overlap.
+What's Missing: Collection is active. The signal is implemented. The main enhancement would be Tempo integration — establishing per-security baselines for whisper-consensus divergence magnitude and flagging outliers relative to that security's own history.
+________________
+
+
+Batch 1 Summary
+ID
+	Name
+	Family
+	Status
+	Directional
+	Est. Accuracy
+	Priority Gap
+	S001
+	Prediction Market New Account Concentration
+	F17
+	Partial
+	Yes
+	45–55%
+	Wallet age tracking
+	S002
+	Prediction Market Probability Divergence
+	F17
+	Active
+	Yes
+	50–60%
+	Peer event formalization
+	S003
+	Options Volume-to-OI Spike
+	F04
+	Active (sparse)
+	Yes
+	55–65%
+	More options data needed
+	S004
+	Options Sweep Aggression
+	F04
+	Active
+	Yes
+	55–65%
+	Time-of-day analysis
+	S005
+	Dark Pool Block Trade Clustering
+	F05
+	BLOCKED
+	Partial
+	50–60%
+	FINRA API key
+	S006
+	SEC Form 4 Filing Timing Anomaly
+	F01
+	Active ✓
+	Yes
+	60–70%
+	Mature
+	S007
+	10b5-1 Plan Modification Patterns
+	F01
+	Active
+	Partial
+	55–65%
+	Plan metadata extraction
+	S008
+	Short Interest Rate-of-Change Spike
+	F06
+	BLOCKED
+	Yes
+	55–65%
+	FINRA API key
+	S009
+	Analyst Estimate Revision Clustering
+	F07
+	Active ✓
+	Yes
+	50–60%
+	NLP on analyst notes
+	S010
+	Earnings Whisper Divergence
+	F17
+	Active
+	Yes
+	50–58%
+	Tempo baselines
+	Key Observations, Batch 1
+Two critical blockers: S005 (Dark Pool) and S008 (Short Interest) are both blocked on the same FINRA API key. This one key unlocks 14 scorer signals across two independent families (F05, F06). It remains the single highest-impact infrastructure acquisition.
+Options data sparsity: S003 has only 102 raw data rows per the coverage doc. The Polygon integration needs tuning. This is the second-highest priority data issue.
+Family coverage in Batch 1: F01 (Insider) is well-covered with mature collection. F04 (Options) is active but data-sparse. F05 (Dark Pool) and F06 (Short) are blocked. F07 (Analyst) is active with good v3.5 data. F17 (Prediction Markets) is active but could benefit from enhanced wallet-level analysis.
+No representation yet from: F02 (Governance), F03 (Litigation), F08 (Filing Tempo), F09 (Narrative), F10 (Social), F11 (Operational), F12 (Calendar), F13 (Futures/COT), F14–F16 (Crypto families), F18 (Cross-Asset), F19 (Credit), F20 (Commodity). These will appear in subsequent batches as the catalog continues through the brainstorm signals.

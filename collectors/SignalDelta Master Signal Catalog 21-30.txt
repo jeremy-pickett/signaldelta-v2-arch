@@ -1,0 +1,409 @@
+﻿SignalDelta Master Signal Catalog
+Batch 3: Signals S021–S030
+Version 1.0 DRAFT | February 7, 2026
+________________
+
+
+S021: Implied Volatility Term Structure Inversion
+Field
+	Value
+	Family
+	F04: Options Market Structure
+	Cascade Hint
+	S2 (Infrastructure Response) — the term structure IS the options market's pricing infrastructure; inversion means infrastructure is pricing an imminent event
+	Chain Affinity
+	CT-03 (Deal Leakage), CT-06 (Earnings Anticipation), CT-01 (Regulatory)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 21
+	Scorer Mapping
+	options_iv_divergence (C tier, 1.15x, 48h half-life, options cluster) — partial implementation. The scorer captures IV divergence generally but doesn't specifically isolate term structure inversion (30d IV > 60d IV) as a distinct signal.
+	Collection Status
+	Blocked/Sparse — iv_term_structure_signals table empty per SIGNAL_COVERAGE.md. iv_surfaces raw data table empty. Polygon API key exists but "needs more options data."
+	Directional
+	No — term structure inversion tells you something imminent but not which direction. The skew (S022) provides the directional overlay.
+	Estimated Accuracy
+	55–65% when isolated to "no known catalyst" inversions. Academic evidence (Cremers and Weinbaum 2010) shows IV divergences predict cross-sectional returns. The challenge is the "no known catalyst" filter — many inversions occur ahead of known events (earnings, FDA dates) and those are mechanically expected, not informationally interesting. The signal value lives entirely in the unexplained inversions.
+	Useful For:
+* Infrastructure Response (S2) evidence for the cascade detector. Term structure inversion is the options market's infrastructure saying "we're pricing a near-term event." When this fires without a Calendar (F12) event to explain it, the market is pricing something not on the public calendar — which is the definition of MNPI-driven behavior.
+* Pairs critically with S022 (Skew Anomaly): inversion tells you when, skew tells you which way. Together they form the F04 family's two-dimensional contribution to scoring: Magnitude from inversion, Lean from skew.
+* CT-03 (Deal Leakage): M&A targets frequently show term structure inversion as market makers price the binary merger premium into near-term expirations.
+* Must be filtered by VIX regime. When VIX > 25, systematic volatility regime changes cause broad inversions that are non-informational. Only single-name inversions that diverge from the VIX environment are diagnostic.
+Validity Notes: The concept is theoretically strong — term structure inversion represents a market-wide pricing of near-term uncertainty that exceeds long-term uncertainty, which is abnormal under normal conditions. The practical problem is entirely data availability: the iv_surfaces table is empty and the iv_term_structure signal generator has no raw data to work from.
+The options_iv_divergence scorer entry captures a related but broader concept (any IV divergence, not specifically term structure). A proper implementation would add a dedicated iv_term_structure_inversion signal that specifically computes the 30d-60d and 30d-90d spreads and fires when: (a) spread > 5 vol points inverted, (b) no F12 calendar event within 30 days, (c) VIX < 25 or single-name inversion exceeds sector cohort inversion by > 3 vol points.
+What's Missing: Raw options surface data. The Polygon API key exists and should provide the underlying data, but the collection pipeline for IV surfaces isn't populating. This is the same "options data sparsity" problem flagged in Batch 1 for S003. Solving it unlocks S021, S022, and strengthens S003/S004.
+________________
+
+
+S022: Options Skew Anomaly
+Field
+	Value
+	Family
+	F04: Options Market Structure
+	Cascade Hint
+	S3 (Capital Commitment) — skew anomalies reflect informed directional positioning through options
+	Chain Affinity
+	CT-02 (Insider), CT-03 (Deal Leakage), CT-06 (Earnings Anticipation)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 22
+	Scorer Mapping
+	options_put_call_extreme (D tier, 0.95x, 48h half-life, options cluster) — partial. Captures extreme put/call ratios but not the volatility surface skew at standardized deltas (25-delta put IV vs. 25-delta call IV).
+	Collection Status
+	Blocked/Sparse — same options data dependency as S021
+	Directional
+	Yes — put skew steepening is bearish (informed put demand); call skew flattening or call-side steepening is bullish
+	Estimated Accuracy
+	50–60%. Skew as a directional predictor is documented (Xing, Zhang, and Zhao 2010 show the volatility smirk predicts equity returns), but the effect size is modest and noisy. Skew moves frequently for non-informational reasons: structured product hedging, dealer inventory management, end-of-quarter portfolio insurance. The signal improves substantially when combined with S021 (inversion provides the urgency context, skew provides the direction).
+	Useful For:
+* Directional overlay for S021 — inversion + bearish skew = "something imminent and bearish." Inversion + bullish skew = "something imminent and bullish."
+* CT-02 (Insider): an insider who can't buy stock (blackout period, compliance restriction) can express conviction through options. The skew anomaly detects this — concentrated OTM call buying steepens the call side and flattens the put side in a way that diverges from structural norms.
+* Provides the Lean contribution that S021 cannot: term structure inversion is non-directional, but skew is directional. Together they contribute both Magnitude and Lean from F04.
+* The options_put_call_extreme implementation captures the simpler version (extreme put/call volume ratios), which is a related but weaker signal than surface skew anomalies. Volume ratios tell you what people bought. Skew tells you what the market is pricing. The latter integrates more information.
+Validity Notes: Conceptually sound, data-constrained. The 25-delta put-call skew is a standard institutional risk metric and anomalies in it are well-documented predictors. The D tier placement of options_put_call_extreme (0.95x) reflects the current weaker implementation (volume ratios vs. volatility surface). A proper skew implementation would justify C or B tier.
+One edge case from the brainstorm is important: skew changes around known earnings dates price expected binary outcomes, not inside information. The signal must be filtered for known catalyst proximity. If an earnings date is within 10 trading days, skew changes are expected and non-diagnostic. Only skew anomalies outside catalyst windows are IALD-relevant.
+What's Missing: Same as S021: options surface data from Polygon. Additionally, a standardized delta computation (converting raw strike-level IV to delta-normalized skew) requires either a volatility surface fitting pipeline or a vendor that provides pre-computed Greeks. This is a meaningful engineering lift beyond just getting raw data.
+________________
+
+
+S023: 13F Institutional Concentration Change
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior (broadly — institutional holders aren't insiders, but 13F filers with >$100M AUM are institutional principals)
+	Cascade Hint
+	S3 (Capital Commitment) — 13F changes represent committed capital
+	Chain Affinity
+	CT-09 (Activist Accumulation — the slow accumulation phase), CT-06 (Earnings Anticipation — positioning ahead of known events)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 23
+	Scorer Mapping
+	No direct mapping. f13_concentration_signals table exists but is empty per SIGNAL_COVERAGE.md ("Quarterly data only").
+	Collection Status
+	Empty — signal table exists, collector exists, but quarterly cadence means sparse data and long lag.
+	Directional
+	Yes — concentration increase is bullish, decrease is bearish
+	Estimated Accuracy
+	45–55%. The 45-day filing lag after quarter-end means the signal is 45–135 days stale by the time it's observable. Academic evidence (Agarwal et al. 2013) shows institutional portfolio changes have modest predictive value, stronger for concentrated funds and value-oriented managers. The coordinated accumulation variant (≥3 institutions increasing >50%) is more informative but requires enough filing overlap to detect, which the quarterly cadence makes difficult.
+	Useful For:
+* Long-lead context signal, similar to S015 (lobbying): 13F changes tell you institutional capital has moved, but the lag means the information value for the 8–72 hour IALD window is limited
+* CT-09 (Activist Accumulation) corroboration: if dark pool (S005) shows persistent accumulation and then a 13F filing confirms a new large position, the 13F retrospectively validates the dark pool signal. This is a calibration/backtesting tool more than a live scoring signal.
+* Coordinated institutional herding is the more interesting variant: when 3+ large funds all increase positions in the same quarter, they may share an information source. But distinguishing "shared information" from "index rebalancing" and "momentum chasing" is the hard problem.
+Validity Notes: The concept is valid but the instrumentation is inherently limited by the quarterly disclosure cadence and 45-day lag. This signal is fundamentally a lagging indicator in IALD terms. By the time you can observe a 13F change, the informed capital has already committed and the detection window may have passed.
+Where this signal has genuine value is calibration and backtesting. If the IALD scoring system detected high Magnitude + bullish Lean in Q2, and then Q2 13F filings (available in August) confirm that 5 hedge funds increased positions by >50%, the 13F data retroactively validates the scoring system's detection. This makes 13F data more valuable as a validation metric than as a live signal.
+The empty signal table is appropriately low-priority. The signal's inherent latency means even a fully functional collector would produce few actionable signals for the live scoring pipeline.
+What's Missing: The collector exists but generates nothing useful given the quarterly cadence. Enhancement path: rather than trying to make 13F a live signal, incorporate it into the walk-forward backtesting framework as a retrospective validation data source. Additionally, tracking who changes positions (activist funds vs. index funds vs. quant funds) would make the signal much more discriminating, but requires a fund classification database.
+________________
+
+
+S024: 13D/13G Filing Timing and Language
+Field
+	Value
+	Family
+	F08: Disclosure & Filing Tempo
+	Cascade Hint
+	S1 (Institutional Process) primary — the 13D filing IS the institutional process record of activist intent
+	Chain Affinity
+	CT-09 (Activist Accumulation) — this signal IS the S1 stage of CT-09
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 24
+	Scorer Mapping
+	No direct mapping. activist_filing_signals table exists but is empty per SIGNAL_COVERAGE.md ("Infrequent events").
+	Collection Status
+	Empty — infrequent events. SEC EDGAR data source is available.
+	Directional
+	Yes — 13D with activist intent is directionally informative. 13G-to-13D conversion is strongly bullish (activist preparing to push for value-creating change) or restructuring-oriented.
+	Estimated Accuracy
+	60–70% for the 13G-to-13D conversion sub-signal specifically. Academic evidence (Brav et al. 2008, Klein and Zur 2009) consistently shows activist campaigns generate positive abnormal returns for target companies. The conversion from passive (13G) to active (13D) is among the most reliably informative public filings because it signals intent to agitate. The challenge is that the filing itself often triggers the price move (making it S4 Narrative Formation, not predictive S1).
+	Useful For:
+* CT-09 (Activist Accumulation) is this signal's primary home. The cascade sequence is: dark pool accumulation (F05, S3 slow) → 13D filing (F08, S1) → media coverage (F09, S4) → second wave positioning (F04/F05, S3 fast). S024 is the S1 trigger that separates the slow accumulation phase from the public campaign phase.
+* Language analysis in Item 4 ("Purpose of Transaction") is genuinely diagnostic. Compare: "investment purposes" (13G boilerplate, passive) vs. "seek to engage with management regarding operational improvements and capital allocation" (activist 13D language, active). NLP on Item 4 text can classify the filing's intent level.
+* "Wolf pack" detection — multiple funds filing 13D/13G within a narrow window on the same target, without explicit coordination disclosure — is a high-value but rare variant. This is legal gray area (coordinated campaigns without group disclosure violate 13D(3) but enforcement is rare).
+Validity Notes: The concept is strong and the academic backing is robust. Activist campaigns reliably generate value, making the 13D filing itself one of the highest-signal-to-noise public disclosures available. The empty signal table is not a collector failure — it's a base rate issue. Activist filings on any given security are genuinely rare events (perhaps 20–40 per year across the full US equity universe). The signal will always be sparse.
+The key validity question: is the 13D filing itself the signal, or is it the confirmation of signals that already fired? If dark pool accumulation (S005) and options flow (S003/S004) already detected the activist's accumulation before the filing, then the 13D is S4 (narrative — the filing makes the intent public) not S1 (institutional process that precedes capital commitment). The cascade stage assignment depends on whether the filing is prospective (activist plans to agitate, hasn't started yet) or retrospective (activist already accumulated, filing is the disclosure requirement). In practice, it's usually retrospective — which means the highest IALD value is detecting the accumulation before the 13D drops, using F04/F05 signals.
+What's Missing:
+1. NLP pipeline for 13D Item 4 language classification (passive vs. active intent)
+2. Wolf pack detection logic (multiple filings on same target within rolling window)
+3. 13G-to-13D conversion tracker (requires historical filing type comparison per entity-security pair)
+These are infrequent-event collectors that will sit idle most of the time but fire with high confidence when they do. The architecture should support low-frequency, high-confidence signal generation without requiring minimum instance counts for tier promotion — the base rate is simply too low for standard promotion criteria.
+________________
+
+
+S025: ETF Creation/Redemption Unit Anomaly
+Field
+	Value
+	Family
+	F04: Options Market Structure (broadly — ETF flows are institutional capital routing, adjacent to derivatives infrastructure)
+	Cascade Hint
+	S3 (Capital Commitment) — creation/redemption represents institutional capital being routed through ETF wrapper
+	Chain Affinity
+	CT-03 (Deal Leakage — accumulation disguised through ETF), CT-09 (Activist — using ETF to build position without direct market impact)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 25
+	Scorer Mapping
+	No direct mapping. etf_creation_signals table exists but is empty per SIGNAL_COVERAGE.md ("Infrequent events").
+	Collection Status
+	Empty — infrequent events
+	Directional
+	Yes — creation (demand) is bullish for underlying basket; redemption (supply) is bearish
+	Estimated Accuracy
+	40–50%. I'm downgrading this from the brainstorm's "Weak-Moderate" to weak. The problem is that ETF creation/redemption is dominated by arbitrage mechanisms, not informed positioning. When an ETF trades at a premium, authorized participants create shares (supply) to capture the arb — this is mechanical, not informational. When it trades at a discount, APs redeem. Most creation/redemption flow is arbitrage noise, not information signal.
+	Useful For:
+* Narrow applicability: primarily useful for single-stock ETFs and very narrow sector ETFs where creation/redemption can be attributed to positioning on specific names. Broad index ETF creation/redemption (SPY, QQQ) is almost entirely arb-driven and carries near-zero informational content.
+* The single-stock ETF universe (TSLL, TSLS, NVDL, etc.) is where this signal has the most theoretical validity — creation/redemption in a single-name ETF bypasses the stock's own order book, which is a concealment mechanism consistent with informed positioning.
+* Even in the best case, this is a thin, supporting signal that contributes marginal F04 family evidence.
+Validity Notes: I'm calling out an assumption from the original brainstorm: the claim that "sophisticated traders use ETF creation/redemption to build or unwind large positions without direct market impact." This is true for authorized participants (large broker-dealers who can create/redeem), but APs are almost always doing arbitrage, not expressing views. The rare exception is when an AP is also acting as a prime broker executing on behalf of a hedge fund client — in which case the AP is a conduit for informed flow, but the creation/redemption data doesn't distinguish AP-as-arb from AP-as-informed-conduit.
+At 40–50% accuracy, this signal barely beats a coin flip. The empty signal table is appropriately low-priority. I'd recommend deprioritizing this unless the single-stock ETF market grows substantially or a data source emerges that distinguishes arb-driven from conviction-driven creation/redemption.
+What's Missing: A single-stock ETF focus filter. If built, the collector should target only ETFs with ≤5 underlying holdings, where creation/redemption flow can be attributed to specific name positioning. Broad ETFs should be excluded entirely.
+________________
+
+
+S026: Index Inclusion/Exclusion Front-Running
+Field
+	Value
+	Family
+	F12: Calendar & Event Structure
+	Cascade Hint
+	S3 (Capital Commitment) — pre-announcement positioning is capital commitment; S1 (Institutional Process) — index reconstitution is an institutional process with known participants
+	Chain Affinity
+	CT-06 (Earnings/Catalyst Anticipation — known calendar event), CT-01 (Regulatory — index changes are quasi-regulatory for passive flows)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 26
+	Scorer Mapping
+	No direct mapping. Most closely related to cohort_performance (C tier, 1.00x) which captures single-stock divergence from peers, and pre_earnings_activity (B tier, 1.30x) which captures known-event anticipation.
+	Collection Status
+	Not built
+	Directional
+	Yes — inclusion is bullish (guaranteed passive demand incoming); exclusion is bearish (guaranteed passive selling incoming)
+	Estimated Accuracy
+	55–65% for detecting leakage, but with a critical validity caveat (see below). Academic evidence (Chen, Noronha, and Singal 2004) shows index addition generates abnormal returns of 5–10% between announcement and effective date. Pre-announcement abnormal returns also exist, consistent with leakage. But modeling of index methodology can replicate much of the pre-announcement return — see validity notes.
+	Useful For:
+* CT-06 analog: index reconstitution dates are known calendar events (Russell in June, S&P ad hoc). The information content is which names will be added/removed, not whether reconstitution will happen. Informed actors know the names before public announcement.
+* Large mechanical flows: Russell 2000 reconstitution alone moves ~$9 trillion in indexed assets. The guaranteed passive buying/selling on reconstitution day makes pre-announcement positioning enormously profitable for those who know the names early.
+* Pairs with S003/S004 (options) and S005 (dark pool): pre-announcement positioning on likely index additions would show up as options accumulation and dark pool blocks in the 5–10 day pre-announcement window.
+Validity Notes: Critical caveat: much of the "front-running" may actually be legitimate modeling. Index reconstitution rules for Russell are publicly documented and reasonably predictable from market cap data. S&P 500 changes are less mechanical but still modeled by quant firms. The brainstorm acknowledges this: "Must distinguish 'leakage' from 'superior modeling of index methodology.'"
+This is the IALD attribution problem (Foundation v2, §13.2) in microcosm. The behavioral anomaly (pre-announcement return) is real, but it might represent legitimate superior analysis of public information rather than leakage of private information. For IALD's purposes, this doesn't matter — the scoring system measures behavioral conviction, not information provenance. But for cascade typing, it matters: CT-01 implies leakage, while "superior modeling" is not a cascade at all.
+I'm placing this in F12 (Calendar & Event Structure) rather than F08 (Filing Tempo) because the reconstitution date is a calendar event, not a filing anomaly.
+What's Missing: An index reconstitution modeler that predicts likely additions/removals based on public market cap data, then monitors whether actual pre-announcement price action exceeds the model-predicted positioning. Excess return beyond model prediction = leakage. Return within model prediction = superior analysis. This is a meaningful research project, not a simple collector.
+________________
+
+
+S027: Dividend Announcement Timing vs. Insider Transactions
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior
+	Cascade Hint
+	S0/S1 boundary — insider knows board's dividend decision (S0) and trades before announcement (S3), with the announcement constituting S4
+	Chain Affinity
+	CT-02 (Insider)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 27
+	Scorer Mapping
+	dividend_trap_detector (C tier, 1.05x, 168h half-life, calendar_events cluster) — related but distinct. The scorer signal detects dividend yield traps (unsustainably high yields), not insider trading ahead of dividend changes.
+	Collection Status
+	Partial — Form 4 data exists (S006 pipeline), FMP dividend calendar exists. The cross-reference between the two (insider transactions within 30 days of dividend announcements) is not currently computed.
+	Directional
+	Yes — insider purchases before dividend increase = bullish; insider sales before dividend cut = bearish
+	Estimated Accuracy
+	50–60%. The concept is valid: dividend decisions are MNPI made at board level with insider advance knowledge. But special dividends and significant changes are rare events — most dividend announcements are routine continuations at the same rate. The signal only fires on changes, which limits the sample size. Academic evidence (John and Lang 1991) shows dividend changes convey information, but the insider-timing component specifically is less studied.
+	Useful For:
+* Extension of S006 (Form 4 timing): this adds a specific catalyst filter to the general insider timing signal. Rather than flagging all insider cluster trades, it flags insider trades that coincide temporally with dividend decisions. The specificity adds conviction when the filter matches.
+* The dividend_trap_detector in the scorer addresses a different question (is the current yield sustainable?) rather than the IALD question (did insiders trade before a yield change?). These are complementary but distinct signals.
+* Calendar integration (F12): dividend ex-dates and declaration dates are known calendar events. The IALD question is whether insider behavior around those dates is anomalous. This is a Tempo baseline question: what's the normal insider trading rate in the 30 days before dividend declarations for this company?
+Validity Notes: Valid but narrow. Most dividend announcements are routine — the same amount declared at the same time each quarter. The signal only has value on changes: special dividends, significant increases (>20%), cuts, or suspensions. These are rare enough that the sample size for backtesting will be small.
+The brainstorm's edge case is important: management sometimes signals dividend intentions through earnings call commentary. "We're evaluating our capital return program" or "we believe we can return more to shareholders" are public signals that make subsequent dividend increases partially priced. The IALD signal would need to filter for insider trades that precede unexpected dividend changes, net of public signaling.
+What's Missing: The cross-reference pipeline. Both data sources exist (Form 4 from S006, dividend calendar from FMP). What's needed is a temporal join: identify insider transactions within 30 days before dividend declaration dates where the declaration represents a material change from the prior dividend.
+________________
+
+
+S028: Buyback Execution Pattern Analysis
+Field
+	Value
+	Family
+	F08: Disclosure & Filing Tempo
+	Cascade Hint
+	S1 (Institutional Process) — buyback execution is a corporate institutional process; S0 (Private Cognition) weak — buyback timing reflects management's private forward assessment
+	Chain Affinity
+	CT-06 (Earnings Anticipation — companies time buybacks around earnings knowledge)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 28
+	Scorer Mapping
+	No direct mapping
+	Collection Status
+	Not built
+	Directional
+	Yes — buyback acceleration is bullish (management believes stock is cheap ahead of positive news); buyback deceleration is bearish (management is preserving cash ahead of negative news)
+	Estimated Accuracy
+	50–58%. The concept is sound: management has asymmetric information and optimizes buyback timing accordingly. Dittmar and Field (2015) find companies buy back more shares in quarters preceding positive announcements. But the effect size is modest, the data is quarterly (10-Q disclosure), and many buyback programs are 10b-18 rule-based (automatic execution at VWAP) rather than discretionary.
+	Useful For:
+* Long-lead context signal, like S015 (lobbying) and S023 (13F). Quarterly disclosure cadence means this can't contribute to the 8–72 hour scoring window. Its value is Tempo context: a company that has been accelerating buybacks for two quarters may be expressing management confidence that should lower the threshold for interpreting subsequent acute signals (options flow, insider trades) as confirmatory.
+* Buyback blackout windows (typically 2 weeks before earnings) create a known absence that's itself informative. If a company is in its buyback window (no blackout) and is not buying back — when they normally would be — that silence is a form of concealment signal (H6 from v3.5 technical reference: "Concealment as Signal").
+Validity Notes: The academic evidence supports the concept directionally, but the practical implementation challenges are significant:
+1. Quarterly disclosure lag — same problem as S023 (13F)
+2. 10b-18 rule-based programs dominate — many buybacks execute mechanically at VWAP regardless of management's private information, diluting the signal
+3. Buyback authorization vs. execution disconnect — companies often announce large buyback authorizations for PR purposes with no intention of executing fully. The authorization is noise; only actual execution is informative.
+At 50–58% estimated accuracy with quarterly lag, this is a Tempo context signal, not a scoring trigger. It should be built as a long-lead fundamental indicator that feeds into Tempo's baseline calibration rather than the acute signal pipeline.
+What's Missing: 10-Q/10-K buyback execution parsing. The data exists in SEC filings (Item 2 of 10-Q Part II discloses monthly buyback volumes and average prices paid). NLP/structured extraction from these filings would produce the raw data. But the quarterly cadence makes this a low-priority build.
+________________
+
+
+S029: Earnings Date Change Signal
+Field
+	Value
+	Family
+	F12: Calendar & Event Structure
+	Cascade Hint
+	S1 (Institutional Process) — earnings date changes are corporate scheduling decisions that flow through IR → compliance → exchange notification institutional channels
+	Chain Affinity
+	CT-06 (Earnings Anticipation)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 29
+	Scorer Mapping
+	earnings_surprise_anticipation (C tier, 1.10x, calendar_events cluster) — related but distinct. The scorer signal detects pre-earnings positioning anomalies, not earnings date changes. The FMP earnings calendar integration (v3.5) provides the underlying date data.
+	Collection Status
+	Partial — FMP earnings calendar provides dates, but historical date comparison (did this quarter's date move vs. the company's typical pattern?) requires a historical earnings date database.
+	Directional
+	Yes, with caveats — the conventional wisdom is "companies accelerate good news, delay bad news." Evidence partially supports this (So and Wang 2014 find companies advancing earnings dates have better results on average). But the effect is modest and exceptions are frequent.
+	Estimated Accuracy
+	45–55%. Weak-Moderate. The "accelerate good / delay bad" heuristic has a positive correlation with outcomes but low individual signal strength. Many date changes are logistical (board meeting scheduling, holidays, audit completion timing). The signal requires establishing a per-company historical pattern and then measuring deviation from that pattern — which requires several years of data per company.
+	Useful For:
+* CT-06 (Earnings Anticipation) corroboration: an earnings date moved earlier combined with bullish pre-earnings options positioning (S003/S004) and bullish insider activity (S006) is a stronger convergence signal than any component alone
+* Tempo baseline: the per-company historical earnings date pattern IS a Tempo baseline. Deviation from it is a z-score calculation. This is a natural Tempo integration point.
+* The "no established pattern" edge case (recent IPO, irregular history) is handled by Tempo's confidence flags: insufficient baseline data → reduced signal weight contribution
+Validity Notes: Valid but weak individually. The brainstorm's "Weak-Moderate" rating is confirmed. This is a supporting signal that adds marginal conviction to F12 family evidence when combined with other pre-earnings signals (S010 whisper divergence, S003 options volume, S006 insider timing). It shouldn't be relied upon alone.
+The main validity concern: companies increasingly pre-announce approximate earnings windows early in the quarter, reducing the information content of subsequent date changes. A shift from "early January" to "January 12" is logistical. A shift from "late January" to "early January" is potentially informative. Measuring the delta correctly requires parsing both the preliminary range and the specific date.
+What's Missing: Historical earnings date database per company. FMP provides the next earnings date but not the history of dates. Building this requires collecting earnings date announcements over time and establishing per-company cadence baselines. This is a Tempo data infrastructure requirement.
+________________
+
+
+S030: Auditor Change or Going Concern Language
+Field
+	Value
+	Family
+	F03: Litigation & Enforcement
+	Cascade Hint
+	S1 (Institutional Process) primary — auditor changes and going concern opinions are institutional process outputs from the audit process. S0 (Private Cognition) secondary — the auditor's decision to resign reflects private assessment of the company's accounting integrity.
+	Chain Affinity
+	CT-07 (Credit Distress), CT-01 (Regulatory — SEC enforcement often follows auditor departures)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 30
+	Scorer Mapping
+	No direct mapping — not currently in scorer
+	Collection Status
+	Not built
+	Directional
+	Yes — strongly bearish. Auditor resignation (vs. orderly transition) and first-time going concern language are both negative signals. There is no "bullish auditor change."
+	Estimated Accuracy
+	65–75% for auditor resignations specifically. This is one of the highest-accuracy signals in the brainstorm for a simple reason: auditors don't resign from profitable clients without serious cause. Resignation (vs. termination by the company) is particularly diagnostic. Academic evidence (Schwartz and Soo 1996, Krishnan and Krishnan 1997) shows auditor changes, especially mid-engagement resignations, precede restatements, SEC enforcement, and bankruptcy at statistically significant rates. Going concern opinions predict bankruptcy within 12 months at rates >70% for initial issuances.
+	Useful For:
+* CT-07 (Credit Distress) — auditor departure is a leading indicator of financial distress. It belongs in the same cascade as S008 (short interest) and future S019 (credit signals). When the auditor leaves AND short interest spikes AND borrow rates rise, the CT-07 pattern is forming.
+* CT-01 (Regulatory) — SEC investigations frequently follow auditor departures, sometimes by months. The auditor's resignation may reflect awareness of SEC inquiry that hasn't been publicly disclosed.
+* The "buried disclosure" phenomenon: companies often announce auditor changes in 8-K Item 4.01 filings released on Friday afternoons, which is itself a concealment signal (H6). The timing of the disclosure, not just the content, carries information.
+* Long half-life: auditor departures remain relevant for months. The scorer should assign 336–504h half-life (2–3 weeks), much longer than most signals.
+Validity Notes: This is conceptually one of the strongest signals in the entire brainstorm. The auditor is the only independent institutional actor who has seen inside the company's books before the public. When they walk away, they're sending the loudest possible signal within the constraints of professional standards (they can't disclose client information, but they can leave).
+The distinction between resignation and termination is critical:
+* Resignation (auditor quits): almost always bad. The auditor saw something they don't want to associate with.
+* Termination by company (company fires auditor): potentially bad (company disagrees with auditor's assessment) or neutral (fee dispute, rotation).
+* Orderly transition (planned rotation, typically with overlap period): noise.
+Only resignation and mid-engagement termination are diagnostic. Orderly transitions should be filtered out.
+The brainstorm rated this "Strong" and I agree. It's not built, which is a meaningful gap. Among unbuild signals, this is one of the highest accuracy-per-complexity ratios available.
+What's Missing:
+1. 8-K Item 4.01 parser — extract auditor change events from SEC filings
+2. Classification logic: resignation vs. termination vs. orderly transition
+3. Going concern NLP: detect first-time going concern language in 10-K audit opinions
+4. Friday afternoon disclosure detection: flag auditor change filings released after 4pm Friday as enhanced concealment signals
+This is a high-value, moderate-complexity build. The SEC EDGAR data source already works (S006 pipeline). The additional parsing is focused on different 8-K item types and 10-K audit opinion sections.
+________________
+
+
+Batch 3 Summary
+ID
+	Name
+	Family
+	Status
+	Directional
+	Est. Accuracy
+	Priority Gap
+	S021
+	IV Term Structure Inversion
+	F04
+	Blocked (no data)
+	No
+	55–65%
+	Options surface data
+	S022
+	Options Skew Anomaly
+	F04
+	Blocked (no data)
+	Yes
+	50–60%
+	Options surface data
+	S023
+	13F Concentration Change
+	F01
+	Empty (quarterly)
+	Yes
+	45–55%
+	Repurpose as backtest validation
+	S024
+	13D/13G Activist Filing
+	F08
+	Empty (infrequent)
+	Yes
+	60–70%
+	NLP on Item 4 language
+	S025
+	ETF Creation/Redemption
+	F04
+	Empty (infrequent)
+	Yes
+	40–50%
+	Deprioritize; single-stock ETF only
+	S026
+	Index Inclusion Front-Running
+	F12
+	Not built
+	Yes
+	55–65%
+	Index reconstitution modeler
+	S027
+	Dividend vs. Insider Transactions
+	F01
+	Partial
+	Yes
+	50–60%
+	Form 4 ↔ dividend temporal join
+	S028
+	Buyback Execution Patterns
+	F08
+	Not built
+	Yes
+	50–58%
+	10-Q parsing; Tempo context signal
+	S029
+	Earnings Date Change
+	F12
+	Partial
+	Yes
+	45–55%
+	Historical date database
+	S030
+	Auditor Change / Going Concern
+	F03
+	Not built
+	Yes (bearish)
+	65–75%
+	8-K Item 4.01 parser
+	Key Observations, Batch 3
+S030 (Auditor Change) is the sleeper hit of this batch. Estimated 65–75% accuracy, strong academic support, unambiguously bearish when it fires, and it's not built. The SEC EDGAR pipeline already works for S006 (Form 4). Extending it to parse 8-K Item 4.01 is moderate-complexity work that would activate one of the highest-confidence unbuild signals. This belongs in F03 (Litigation & Enforcement), which currently has 10 signals — adding auditor change/going concern would strengthen a family that provides crucial CT-07 (Credit Distress) evidence.
+Options surface data is the batch-level blocker. S021 and S022 are both blocked on the same data gap: IV surface data from Polygon. This is the same bottleneck flagged in Batch 1 for S003. Solving the Polygon options data pipeline would unblock 4+ signals across Batches 1 and 3, all in F04 (Options Market Structure). F04 is conceptually one of the strongest families but empirically one of the thinnest because the data pipeline isn't feeding it.
+Three signals in this batch are better suited as Tempo context than acute scoring signals. S023 (13F), S028 (Buyback), and S029 (Earnings Date) all operate on quarterly or near-quarterly cadence with significant lag. They can't meaningfully contribute to the 8–72 hour IALD window. Their value is establishing long-lead environmental context that Tempo uses to calibrate sensitivity thresholds for the acute signal families. This is a design insight: not every signal needs to feed the scorer directly. Some signals feed Tempo, which feeds the scorer indirectly through z-score calibration.
+S025 (ETF Creation/Redemption) should be formally deprioritized. At 40–50% estimated accuracy, dominated by arbitrage mechanics, with an empty signal table and infrequent events, this is the weakest signal in the first 30. The single-stock ETF niche is too narrow to justify collector development at this stage. Mark it as Tier X (Experimental) in the scorer if it's ever built, with a path to promotion only if the single-stock ETF market grows.
+S024 (Activist 13D) has an architectural tension. The 13D filing is retrospective — it's filed after the activist has accumulated. The highest IALD value is detecting the accumulation before the filing using F04/F05 signals. But the filing itself is the highest-confidence public confirmation of activist intent, making it the S1 stage marker for CT-09. The signal's primary role is cascade chain type classification, not scoring input. This parallels the S017 (M&A Leakage) finding from Batch 2: some brainstorm "signals" are actually cascade diagnostics.
+________________
+
+
+Ready for Batch 4: Signals S031–S040 (Equities Brainstorm 31–40)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

@@ -1,0 +1,409 @@
+﻿SignalDelta Master Signal Catalog
+Batch 4: Signals S031–S040
+Version 1.0 DRAFT | February 7, 2026
+________________
+
+
+S031: Material Weakness Disclosure Trajectory
+Field
+	Value
+	Family
+	F08: Disclosure & Filing Tempo
+	Cascade Hint
+	S1 (Institutional Process) — material weakness disclosure is a required institutional output of the SOX/audit process
+	Chain Affinity
+	CT-07 (Credit Distress), CT-01 (Regulatory — SEC enforcement follows persistent weaknesses)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 31
+	Scorer Mapping
+	No direct mapping. Conceptually paired with S030 (Auditor Change) — both are audit-derived distress precursors.
+	Collection Status
+	Not built
+	Directional
+	Yes — bearish. New material weakness is negative. Persistent weakness (>2 years) compounds the bearish signal. Sudden "remediation" before M&A is ambiguously bearish (cosmetic fix).
+	Estimated Accuracy
+	55–65%. The academic evidence is clear: material weaknesses predict restatements (Doyle, Ge, and McVay 2007) and are associated with lower accrual quality. New weaknesses are more predictive than persistent ones (which may already be priced). The trajectory dimension — watching weakness count increase, persist, or suddenly resolve — adds information beyond a static snapshot.
+	Useful For:
+* CT-07 (Credit Distress) evidence chain: auditor departure (S030) + new material weakness (S031) + short interest spike (S008) is a powerful multi-family convergence. S030 and S031 are both F08 family (intra-family corroboration), but S008 is F06 (independent family Agreement contribution).
+* The "sudden remediation before M&A" variant is a CT-03 (Deal Leakage) tell: if a company claims remediation of a long-standing weakness within 90 days of an M&A announcement, the remediation was likely motivated by deal due diligence requirements, not genuine improvement. This creates a prospective signal — if remediation is claimed and no deal follows, either the deal fell through or the remediation was genuine.
+* Tempo context signal: like S028 (Buyback) and S029 (Earnings Date), this operates on quarterly/annual cadence. Its value is establishing baseline corporate health that modulates the scoring engine's sensitivity to acute signals.
+Validity Notes: Conceptually solid, operationally a Tier 2 (Tempo context) signal rather than Tier 1 (acute scorer input). Material weakness disclosures appear in 10-K Item 9A and 10-Q officer certifications — both quarterly filings with inherent lag. The trajectory analysis requires multi-period comparison (minimum 3 filings to establish direction), adding further latency.
+The "sudden remediation" variant is the most IALD-relevant aspect: it's a concealment-adjacent signal where the company claims a problem is fixed at a suspiciously convenient time. This maps to H6 (Concealment as Signal) from the v3.5 technical reference.
+What's Missing: 10-K Item 9A parser for material weakness extraction. NLP classification of weakness type (revenue recognition, IT controls, financial close process) and severity. Multi-period comparison logic to compute trajectory (improving, stable, deteriorating). Remediation timing cross-reference with M&A announcement dates.
+________________
+
+
+S032: C-Suite Departure Timing and Stated Reasons
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior
+	Cascade Hint
+	S1 (Institutional Process) — 8-K Item 5.02 filing is the institutional record; S0 (Private Cognition) secondary — the executive's decision to leave reflects private assessment
+	Chain Affinity
+	CT-02 (Insider), CT-07 (Credit Distress)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 32
+	Scorer Mapping
+	csuite_departure (B tier, 1.30x, 336h half-life, governance cluster), tenure_anomaly (C tier, 1.00x, 240h half-life)
+	Collection Status
+	Active — SEC EDGAR 8-K filings
+	Directional
+	Yes — bearish. C-suite departures, particularly CFO departures with euphemistic language, are unambiguously negative signals. There is no "bullish executive departure" (retirement after long successful tenure is neutral, not bullish).
+	Estimated Accuracy
+	60–70% for CFO departures with "personal reasons" language and no named successor. This is one of the more reliable corporate distress precursors. Academic evidence (Desai, Hogan, and Wilkins 2006) finds CFO turnover predicts restatements. The specificity of how the departure is disclosed (language, successor status, timing) adds substantial predictive information beyond the bare fact of departure.
+	Useful For:
+* CT-07 (Credit Distress): CFO departure is often the canary in the coal mine. CFOs have the deepest visibility into accounting quality, covenant compliance, and cash flow trajectory. When they leave abruptly, the probability of subsequent financial distress elevates materially.
+* CT-02 (Insider) variant: the departure itself is the insider "trade" — not a stock transaction, but an exit from the information position. Cross-reference with S006 (Form 4): did the departing executive accelerate stock sales in the months before the departure announcement?
+* Language classification is the key enrichment:
+   * "personal reasons" without elaboration = highest concern
+   * "pursue other opportunities" with named successor = moderate concern
+   * "retirement" after >5 year tenure with overlap period = low concern
+   * no successor named = amplifier for any departure type
+* The tenure_anomaly scorer signal (C tier) captures a related dimension: departures occurring at unusual tenure lengths (CFO leaving after 14 months when industry median is 4+ years) are more diagnostic than departures at typical career transition points.
+* Long half-life (336h = 2 weeks for B tier, 240h = 10 days for C tier) is appropriate — the information content of a departure persists until the company either names a successor, discloses the reason more fully, or a resolution event occurs.
+Validity Notes: Strong signal, well-instrumented. The scorer already has two entries covering this concept. The governance cluster placement is correct in the v1 scorer but wrong in the 20-family taxonomy — this belongs in F01 (Corporate Insider Behavior), not F02 (Governance & Political Intelligence), because the departing executive is a corporate insider, not a government actor.
+The brainstorm's edge case is important: "planned succession announced, but accelerated." Companies often announce succession plans 6–12 months in advance, then suddenly accelerate the transition. The acceleration itself — the delta between announced timeline and actual timeline — is the informational signal. A CEO departure that was supposed to happen in Q4 but happens in Q2 suggests something changed between the plan announcement and execution.
+What's Missing: The departure language classifier. The 8-K Item 5.02 filing exists and the EDGAR pipeline can parse it, but classifying the reason language into the diagnostic categories above requires NLP — either rules-based (keyword matching on "personal reasons," "pursue other opportunities," "retirement") or LLM-based. Rules-based would cover 80% of cases; LLM-based would handle the remaining euphemistic variations.
+________________
+
+
+S033: Board Member Resignation Clustering
+Field
+	Value
+	Family
+	F02: Governance & Political Intelligence (for board members who are independent directors with external networks) / F01: Corporate Insider Behavior (for inside directors)
+	Cascade Hint
+	S1 (Institutional Process) primary — board resignations flow through 8-K Item 5.02 institutional channels
+	Chain Affinity
+	CT-07 (Credit Distress), CT-01 (Regulatory)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 33
+	Scorer Mapping
+	board_resignation_cluster (A tier, 1.40x, 336h half-life, governance cluster), board_resignation_cluster_bearish (directional variant), board_official_network (B tier, 1.25x, 504h half-life), board_interlock_exit (C tier, 1.10x, 240h half-life)
+	Collection Status
+	Active — SEC EDGAR 8-K filings
+	Directional
+	Yes — strongly bearish. Board resignation clustering is among the most unambiguously negative signals available.
+	Estimated Accuracy
+	65–75% for ≥2 independent director departures outside the normal annual meeting cycle. This is a high-confidence signal with strong academic support and SEC enforcement pattern confirmation. Fich and Shivdasani (2007) show board composition changes predict corporate events. The clustering dimension — multiple departures in a narrow window — dramatically increases confidence because it indicates systemic dysfunction rather than individual career decisions.
+	Useful For:
+* Highest-tier governance signal in the system. At A tier (1.40x), board_resignation_cluster is the strongest scorer entry in F02 after the congressional committee chair signals. The confidence is warranted: independent directors have fiduciary obligations and resign when they believe staying associates them with undisclosed liability.
+* CT-07 (Credit Distress): board departures often precede SEC investigations, restatements, and CEO terminations by 3–12 months. They're a leading indicator because board members see problems early but can't fix them quickly.
+* The board_official_network sub-signal (B tier, 1.25x) captures an important variant: when a departing board member also serves on a government advisory board, regulatory body, or other political-adjacent institution, the departure may reflect awareness of upcoming regulatory action against the company. This bridges F01/F02 — the board member is simultaneously a corporate insider and a governance network participant.
+* The board_interlock_exit sub-signal (C tier) detects a subtler pattern: directors who sit on multiple boards ("interlocked" directors) resigning from one board while retaining others. The selective resignation indicates the information is company-specific, not a general career decision.
+* The 504h half-life (3 weeks) on board_official_network is the longest half-life of any B-tier signal in the scorer — reflecting the slow-burning nature of governance-driven cascades.
+Validity Notes: One of the strongest signals in the catalog. The A-tier placement is justified. The only calibration concern is the rarity: board resignation clusters are infrequent events (perhaps 5–15 per year across the US equity universe), which means the minimum instance requirement (50 for A tier) will take years to accumulate for promotion validation.
+The brainstorm's edge case — resignation with explicit disagreement disclosure — is particularly diagnostic. SEC rules require departing directors to disclose if the resignation is due to disagreement with the company on a matter the director deems important. Most resignations do NOT include this disclosure (directors prefer quiet exits). When it does appear, it's the strongest possible public signal short of a fraud allegation.
+What's Missing:
+1. Disagreement disclosure detection — parse 8-K for the specific disagreement language required under SEC rules
+2. Committee membership classification — audit committee resignations are more diagnostic of accounting problems than compensation committee resignations
+3. Director independence classification — inside directors leaving is different from independent directors leaving
+4. Temporal clustering logic — define the window (suggested: ≥2 departures within 180 days outside annual meeting window)
+________________
+
+
+S034: Customer/Supplier Concentration Disclosure Changes
+Field
+	Value
+	Family
+	F08: Disclosure & Filing Tempo
+	Cascade Hint
+	S1 (Institutional Process) — disclosure changes are institutional filing process outputs
+	Chain Affinity
+	CT-07 (Credit Distress — loss of major customer)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 34
+	Scorer Mapping
+	supply_chain_disruption (P tier, 0.55x, 168h half-life, alternative cluster) — loosely related but captures a broader concept
+	Collection Status
+	Not built
+	Directional
+	Ambiguous — customer disappearance is bearish; customer concentration increase could be bullish (growth) or bearish (over-reliance). The brainstorm acknowledges this directional ambiguity.
+	Estimated Accuracy
+	45–55%. The concept is valid: when a previously named 10%+ customer disappears from the 10-K, something changed in that relationship. But the operational challenges are substantial: (1) annual filing cadence with lag, (2) NLP required to compare year-over-year risk factor and segment disclosure language, (3) disappearance can be mechanical (customer dropped below disclosure threshold organically) rather than informational.
+	Useful For:
+* Narrow but high-value when it fires: a company losing a 20%+ customer is a material fundamental event. If the disclosure change appears in the 10-K before the revenue impact shows up in earnings, there's a 1–2 quarter lead time.
+* Cross-reference opportunity: if customer concentration changes AND analyst revisions cluster (S009), the analysts may have learned about the customer loss through channel checks before the filing.
+* Tempo context signal: like S031, S028, S029 — annual cadence means this is environmental context, not acute scoring input. It feeds Tempo's baseline for the company's revenue fragility.
+Validity Notes: Valid but impractical at scale. Year-over-year 10-K comparison for disclosure language changes across the full coverage universe is a substantial NLP engineering project. The signal fires infrequently (customer concentration changes are rare for established companies) and the directional ambiguity further limits value.
+The supply_chain_disruption scorer entry at P tier (0.55x) captures a broader version of this concept but through different data sources (news, shipping data). The two signals are conceptually related but mechanically independent — one uses SEC filing language comparison, the other uses alternative data.
+At 45–55% with annual cadence and directional ambiguity, this is among the weakest signals in the equities brainstorm. I'm confirming the brainstorm's "Weak-Moderate" rating and suggesting this stays in the Tempo context layer rather than the acute signal pipeline.
+What's Missing: Year-over-year 10-K risk factor comparison NLP pipeline. This is a meaningful engineering investment for a low-frequency, low-confidence signal. Recommend deferring unless it can be built as a byproduct of a broader 10-K change detection system that also serves S030 (Auditor Change), S031 (Material Weakness), and other filing-derived signals.
+________________
+
+
+S035: Stock Loan Rate (Borrow Cost) Spikes
+Field
+	Value
+	Family
+	F06: Short Selling & Borrow Infrastructure
+	Cascade Hint
+	S2 (Infrastructure Response) primary — borrow rate IS the infrastructure price of shorting; S3 (Capital Commitment) secondary — the demand driving the rate reflects committed short positions
+	Chain Affinity
+	CT-07 (Credit Distress), CT-01 (Regulatory), CT-06 (Earnings Anticipation)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 35
+	Scorer Mapping
+	Part of S008's family: short_interest_spike, short_velocity_divergence, short_persistence, short_intensity_ratio, exempt_short_ratio, cohort_short_correlation — all F06 signals. The specific borrow rate sub-signal maps to borrow_rate in the collection layer.
+	Collection Status
+	BLOCKED — Missing IBKR API key (MEDIUM priority in SIGNAL_COVERAGE.md). Borrow rate data requires Interactive Brokers or Ortex/S3 Partners subscription.
+	Directional
+	Yes — borrow rate spikes are bearish (informed short sellers paying premium to express conviction)
+	Estimated Accuracy
+	60–70%. This is one of the strongest signals in the short selling family. Borrow rate reflects real-time demand for shares to short, which is a purer measure of informed bearish conviction than short interest (which is bi-monthly and delayed). The transition from General Collateral to Hard-to-Borrow status is a discrete, high-confidence event. Academic evidence (D'Avolio 2002, Drechsler and Drechsler 2014) shows borrow cost predicts negative returns.
+	Useful For:
+* S2 (Infrastructure Response) — borrow rates are infrastructure pricing. When the cost to short doubles overnight, the prime brokerage infrastructure is responding to demand pressure. This is a fundamentally different kind of evidence than a short interest filing (which is a static snapshot of already-committed positions).
+* CT-07 (Credit Distress): borrow rates spike early in credit deterioration cascades, often before CDS spreads widen. The credit desk and the equity lending desk are different groups at the same prime broker — when the lending desk tightens, it may reflect credit concerns communicated internally but not yet public.
+* The GC-to-HTB transition is a discrete signal that's more informative than continuous borrow rate changes. Moving from easy-to-borrow to hard-to-borrow status means the float has been substantially consumed by short sellers — the remaining supply is held by long-only holders who don't lend.
+* Pairs with S008 (Short Interest RoC): borrow rate is the real-time version of what short interest reports every two weeks. When borrow rate spikes and short interest hasn't yet been reported, the borrow rate is the leading indicator. When short interest catches up and confirms, Agreement between the two S006 family signals strengthens.
+Validity Notes: This is the strongest individual signal within F06, and I'm estimating it higher than S008 (Short Interest, 55–65%) because borrow rate is more timely (real-time vs. bi-monthly) and more directly reflects demand pressure rather than accumulated positions. The S-tier congressional signals and the A-tier board resignation signal are the only signals in the catalog I rate higher.
+The IBKR API blocker is MEDIUM priority per coverage doc, below the FINRA blocker (HIGH). I'd argue it should be elevated: borrow rate data from IBKR would provide the real-time S2 evidence that the FINRA short interest data (delayed) cannot. The two data sources serve different temporal functions — IBKR for real-time S2, FINRA for periodic S3 confirmation.
+The semi-public data availability is a constraint: IBKR provides borrow rates to its clients, Ortex/S3 Partners are paid services. There's no fully public source of real-time borrow rates. This may require a data subscription, which contradicts the v1 Foundation's "public/free data only" constraint. The v2 Foundation should probably acknowledge that some signals justify modest data acquisition costs.
+What's Missing: IBKR API key or Ortex/S3 Partners subscription. This is a data acquisition decision, not an engineering problem. The collector logic is straightforward: poll borrow rates daily, compute rate-of-change, flag GC→HTB transitions.
+________________
+
+
+S036: Fail-to-Deliver Pattern Anomalies
+Field
+	Value
+	Family
+	F06: Short Selling & Borrow Infrastructure
+	Cascade Hint
+	S2 (Infrastructure Response) — FTDs represent settlement infrastructure stress
+	Chain Affinity
+	CT-07 (Credit Distress — settlement stress), CT-01 (Regulatory — Reg SHO threshold list triggers regulatory attention)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 36
+	Scorer Mapping
+	ftd_pattern (E tier, 0.80x, 96h half-life, short cluster), ftd_squeeze_bullish (directional variant in bullish signals set)
+	Collection Status
+	Active — SEC publishes FTD data semi-monthly. Data available but delayed.
+	Directional
+	Partially — elevated FTDs are bearish (selling pressure without borrow), but the ftd_squeeze_bullish variant is bullish (forced covering creates upward pressure). The directional interpretation depends on whether you expect the FTDs to persist (bearish) or resolve through forced covering (bullish).
+	Estimated Accuracy
+	45–55%. Weak-Moderate. FTDs are a noisy signal. Most fail-to-delivers are operational (settlement timing, ETF creation lag, custodian issues) rather than informational. The meme stock era (2021) elevated FTD analysis in retail consciousness beyond its actual predictive value. Persistent Reg SHO threshold list presence (>5 consecutive days) is more informative than aggregate FTD volume.
+	Useful For:
+* Settlement layer evidence that's genuinely independent from other F06 signals. FTD data comes from a different source (SEC) than short interest (FINRA) or borrow rates (IBKR). Within the F06 family, FTD patterns provide a third data stream.
+* The ftd_squeeze_bullish variant captures forced covering dynamics: when FTDs are so elevated that T+35 forced close-out obligations create involuntary buying. This is the only bullish signal in the F06 family — every other short selling signal is bearish. The bidirectionality within the family is architecturally important.
+* Reg SHO threshold list persistence (>5 days) is the discrete event worth monitoring. Aggregate FTD volume is noise.
+Validity Notes: The brainstorm rated this "Weak-Moderate" and I concur. The E tier placement (0.80x) is appropriate. FTDs carry real information about settlement infrastructure stress, but the noise-to-signal ratio is high and the data is delayed (semi-monthly publication, 2-week lag). The 96h half-life is short, reflecting the rapid decay of FTD informational value.
+The meme stock caveat deserves emphasis: retail analysis of FTD data (particularly in GME/AMC discourse) has substantially overestimated its predictive value. Much of the "DD" around FTDs confuses operational settlement mechanics with informed positioning. The IALD system should use FTDs as a supporting signal within F06, not as a standalone indicator.
+What's Missing: Reg SHO threshold list monitoring. The raw FTD data is collected (SEC publication), but the discrete event of threshold list persistence >5 days requires a stateful tracker that monitors list membership over consecutive reporting periods. This is a simple engineering addition to the existing FTD collector.
+________________
+
+
+S037: ADR/Ordinary Share Spread Divergence
+Field
+	Value
+	Family
+	F18: Cross-Asset Correlation Structure
+	Cascade Hint
+	S3 (Capital Commitment) — the divergence reflects informed positioning in one market that hasn't propagated to the other
+	Chain Affinity
+	CT-04 (Media Leak — home market news not yet in English), CT-08 (Geopolitical — cross-border information flow)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 37
+	Scorer Mapping
+	No scorer entry, but adr_spread_signals table exists with 5 rows per SIGNAL_COVERAGE.md. The collector is working but the scorer doesn't consume the output.
+	Collection Status
+	Active — collector working, 5 signals generated. Scorer integration missing.
+	Directional
+	Yes — ADR premium = bullish (US market knows something positive the home market hasn't priced); ADR discount = bearish
+	Estimated Accuracy
+	55–65%. The concept is well-established in international finance. Gagnon and Karolyi (2010) document persistent ADR-ordinary price deviations and their informational content. The accuracy is higher during non-overlapping market hours (when only one market is open and the other can't arbitrage) and lower during overlap (when arbitrageurs compress the spread).
+	Useful For:
+* F18 (Cross-Asset Correlation Structure) evidence — ADR divergence is cross-market information asymmetry, not company-specific. It detects information flowing through one market before reaching another. This is a genuinely independent data stream from all domestic equity signals.
+* CT-04 (Media Leak): when home-market news breaks in local language before English dissemination, the ordinary shares react but the ADR doesn't (or vice versa). The divergence is a language barrier information asymmetry — a legitimate but operationally distinct type of IALD.
+* CT-08 (Geopolitical): cross-border regulatory actions (e.g., Chinese regulatory crackdown affecting US-listed Chinese ADRs) create ADR-ordinary divergences as one market prices the action before the other.
+* The 5 existing signals represent a small but proven collection. This is a quick win: add the scorer mapping for adr_spread and the existing data immediately starts contributing to F18 family evidence.
+Validity Notes: This signal has a unique property: it's generating data (5 signals) with no scorer integration. That means the collector works, the analysis pipeline works, but the output goes into a table nobody reads. Adding a scorer entry for adr_spread at C tier (1.00–1.15x) with the cross_asset cluster would instantly activate F18 (Cross-Asset Correlation Structure), which currently has only 2 signals — equity_crypto_divergence (P tier) and cross_asset_correlation_break (P tier). F18 is the thinnest active family in the system. Adding ADR spread would give it a production-grade signal.
+The family placement in F18 is deliberate: ADR-ordinary divergence is structurally identical to equity-crypto divergence — both detect cross-market information asymmetry. They belong in the same family because they represent the same institutional pathway (correlated assets in different markets pricing information at different speeds).
+What's Missing: Scorer integration. This is the single lowest-effort improvement in the entire catalog: write a scorer entry for adr_spread, set it to C tier, assign it to cross_asset cluster. The data already flows.
+________________
+
+
+S038: Convertible Bond Spread vs. Equity Behavior
+Field
+	Value
+	Family
+	F19: Credit & Fixed Income Signals
+	Cascade Hint
+	S2 (Infrastructure Response) — credit spread widening IS the debt market's infrastructure repricing of risk
+	Chain Affinity
+	CT-07 (Credit Distress) — this signal IS the CT-07 entry point
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 38
+	Scorer Mapping
+	No mapping. F19 is Not Built.
+	Collection Status
+	Not built. Requires TRACE data (FINRA bond trade reporting) and convertible bond analytics.
+	Directional
+	Yes — credit spread widening with stable equity = bearish for equity (credit market leads, equity will follow). Credit spread tightening with stable equity = bullish.
+	Estimated Accuracy
+	60–70%. Among the strongest unbuilt signals in the system. Academic evidence is extensive: Acharya and Johnson (2007) demonstrate that CDS/credit markets lead equity markets by 1–3 days in pricing negative information, particularly for financial firms and leveraged companies. The credit-equity lead-lag relationship is one of the most robust findings in cross-asset research. The convertible bond variant is particularly clean because it contains both a credit and an equity component, making the decomposition internal to the instrument.
+	Useful For:
+* CT-07 (Credit Distress) — this is the defining signal for CT-07. The chain type's diagnostic signature is "S2 fires before S1 and S3" — meaning infrastructure (credit market) reprices before institutional process (rating agency) or equity capital commitment. Without F19, the cascade detector cannot identify CT-07 at all.
+* Cross-asset Agreement: credit-equity divergence is mechanically independent from everything in F01 through F13. Credit analysts and equity analysts are different people at different desks with different information flows. When credit says one thing and equity says another, the divergence is among the most diagnostically powerful observations in finance.
+* The convertible bond decomposition is the cleanest version of this signal because a single instrument contains both credit and equity components. The credit spread component widening while the equity option component holds is an internal inconsistency within the same instrument — no cross-instrument noise.
+* This is the entry point for eventually building F19 as a full family. CDS spreads, corporate bond spreads, repo rates, and credit facility covenants are all F19 signals. The convertible bond variant is the most tractable starting point because convertible data is available through TRACE.
+Validity Notes: This is, conceptually, one of the top 5 signals in the entire catalog. I'm estimating 60–70% accuracy based on the academic literature, which is conservative — some studies find credit-equity lead-lag accuracy above 75% for companies with active CDS/convertible markets.
+The "Not Built" status is the most significant strategic gap in the 20-family taxonomy. F19 has zero signals. Without it, the cascade detector cannot identify CT-07 (Credit Distress), and the scoring engine's cross-asset Agreement calculation is missing an entire independent channel. Building F19 starting with this signal should be a medium-term priority.
+The practical constraints are real: TRACE data requires FINRA access (same API key as dark pool/short interest), and convertible bond analytics require credit modeling capability that goes beyond the current equity-focused infrastructure. But the strategic value justifies the investment.
+What's Missing: Everything — this is a family-level build, not a single signal. Starting point: FINRA TRACE data feed → convertible bond trade extraction → credit spread decomposition → cross-reference with equity price → divergence detection. This is a multi-month engineering project. But it would activate an entirely new family that provides genuinely independent evidence from a different institutional pathway than anything currently in the system.
+________________
+
+
+S039: Sector ETF vs. Single-Stock Divergence
+Field
+	Value
+	Family
+	F18: Cross-Asset Correlation Structure
+	Cascade Hint
+	S3 (Capital Commitment) — the divergence reflects localized capital commitment on a specific name
+	Chain Affinity
+	CT-02 (Insider — company-specific information), CT-03 (Deal Leakage — target diverges from sector)
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 39
+	Scorer Mapping
+	cohort_performance (C tier, 1.00x, 168h half-life, alternative cluster) — partial implementation. The scorer captures cohort divergence but uses a simplified approach (sector-level comparison) rather than the multi-lens Tempo model.
+	Collection Status
+	Active — market data available for sector ETF comparison
+	Directional
+	Yes — outperformance vs. sector = bullish; underperformance = bearish
+	Estimated Accuracy
+	55–65%. Cohort decoherence is Hypothesis H3 — one of the founding hypotheses of the entire IALD framework. The academic evidence supports it (Cohen and Lou 2012 show stocks with complex business models diverge from peers predictably around information events). The challenge is defining "the right peer group" — sector ETF is a crude proxy. The Tempo multi-lens model (business dimension, factor exposure, regulatory jurisdiction) would produce much better peer baskets.
+	Useful For:
+* This is the empirical implementation of H3 (Cohort Decoherence), the most fundamental hypothesis in the IALD framework after H1 (Leakage Inevitability). The entire Tempo multi-lens architecture exists to serve this signal.
+* CT-02 (Insider) and CT-03 (Deal Leakage): when a stock diverges from its sector without public explanation, information localized to that company is being traded. The absence of sector-wide movement confirms the information is company-specific, not macro.
+* Cross-family Agreement: cohort divergence (F18) combined with options flow (F04) and insider trading (F01) on the same name produces strong multi-family Agreement. The divergence says "this company specifically," the options say "someone is positioning directionally," the insider trade says "someone with access is acting."
+* The alternative cluster placement in the scorer is wrong. Cohort divergence should be in cross_asset — it's a cross-security comparison, not an alternative data source. The 20-family taxonomy corrects this by placing it in F18.
+Validity Notes: The concept is foundational to IALD and well-supported by theory and evidence. The current implementation (cohort_performance, C tier, 1.00x) is underselling the signal because the peer group definition is crude. Sector ETF comparison (XLF, XLK, etc.) treats all companies in a sector as equivalent peers, which they're not. A semiconductor company and a SaaS company are both "tech" but their price drivers are completely different.
+The Tempo multi-lens model — comparing a security against multiple peer groups simultaneously, each representing a different business dimension — would dramatically improve this signal's precision. When a pharmaceutical company diverges from its pharma cohort AND its M&A target cohort AND its patent-dependent cohort all simultaneously, the convergence across lenses is powerful. When it diverges from only one lens, the specific lens that detects the divergence identifies the dimension of the private information.
+This signal should be promoted from C tier to B tier once Tempo integration provides multi-lens cohort baselines. With sector-ETF-only comparison, C tier is correct.
+What's Missing: Tempo multi-lens cohort baselines. The current sector ETF comparison is a placeholder. The full implementation requires: (1) peer group definition across multiple lenses, (2) per-security, per-lens baseline volatility, (3) z-score calculation of divergence through each lens, (4) aggregation of multi-lens divergence into a composite cohort decoherence score. This is a Tempo engineering project, not a signal collector project.
+________________
+
+
+S040: Lock-Up Expiration Anticipatory Trading
+Field
+	Value
+	Family
+	F12: Calendar & Event Structure
+	Cascade Hint
+	S3 (Capital Commitment) — pre-expiration positioning is capital commitment based on expectations about insider selling behavior
+	Chain Affinity
+	CT-06 (Earnings/Catalyst Anticipation) — lock-up expiration is a known calendar event; the information content is insider intentions, not the date itself
+	Original Ref
+	IALD_Signal_Brainstorm_Equities_v1, Signal 40
+	Scorer Mapping
+	ipo_lockup_positioning (D tier, 0.90x, 72h half-life, calendar_events cluster)
+	Collection Status
+	Active — FMP IPO calendar provides lock-up dates. ipo_lockup_positioning is in the scorer.
+	Directional
+	Yes — pre-expiration selling pressure is bearish (market expects heavy insider selling); pre-expiration accumulation is bullish (market expects insiders to hold)
+	Estimated Accuracy
+	50–58%. The base event (lock-up expiration creating selling pressure) is well-known and partially priced in advance. The incremental information is whether the actual insider selling will be heavier or lighter than the market expects. Pre-expiration trading that exceeds the baseline lock-up discount (typically 1–3% in the 5 days before expiration) suggests informed expectations about insider selling intensity. Academic evidence (Field and Hanka 2001, Brav and Gompers 2003) documents the lock-up expiration effect but shows it has diminished as the pattern has become well-known.
+	Useful For:
+* CT-06 analog: the date is known, the content (how much will insiders sell?) is not. This maps directly to the CT-06 pattern — known calendar event, unknown outcome, pre-event positioning by informed actors.
+* Cross-reference with S006 (Form 4) and S007 (10b5-1): insiders who plan to sell at lock-up expiration may modify 10b5-1 plans or file Form 4s in the pre-expiration window. The convergence of calendar event (F12) + insider behavior (F01) + options positioning (F04) around lock-up dates creates multi-family Agreement.
+* The signal is strongest for recently-IPO'd companies with limited trading history, where the lock-up release represents the first opportunity for insiders to sell. For SPACs, the lock-up dynamics are different (often earlier, with different regulatory triggers) and may warrant a separate sub-signal.
+* D tier (0.90x) placement is appropriate — the lock-up effect has been well-documented and is partially priced, reducing incremental predictive value.
+Validity Notes: Valid but diminishing. The lock-up expiration effect was more pronounced before it became widely known and systematically traded against. Modern market participants (including retail investors who now track lock-up dates through free tools) price the expected selling pressure in advance, reducing the incremental signal from detecting "anticipatory trading." The signal's remaining value is in detecting deviations from the expected lock-up effect — heavier-than-expected pre-expiration selling (more informed) or lighter-than-expected (insiders plan to hold).
+The brainstorm's edge case about insiders telegraphing intentions through S-1 amendments and 10b5-1 plans is well-taken. These public disclosures partially reveal insider intentions before the lock-up expires, making some "anticipatory trading" actually just reaction to public signaling rather than information leakage.
+What's Missing: Lock-up date database. FMP provides IPO dates but lock-up terms vary (90-day, 180-day, custom) and aren't standardized. Building a comprehensive lock-up calendar requires parsing S-1 registration statements for lock-up provisions — a one-time NLP task per IPO that could be automated. The ipo_lockup_positioning scorer entry exists and the FMP calendar feeds it, but the precision of lock-up date identification may be imperfect.
+________________
+
+
+Batch 4 Summary
+ID
+	Name
+	Family
+	Status
+	Directional
+	Est. Accuracy
+	Priority Gap
+	S031
+	Material Weakness Trajectory
+	F08
+	Not built
+	Yes (bearish)
+	55–65%
+	10-K Item 9A parser; Tempo context
+	S032
+	C-Suite Departure Timing
+	F01
+	Active ✓
+	Yes (bearish)
+	60–70%
+	Language classifier for departure reason
+	S033
+	Board Resignation Clustering
+	F02
+	Active ✓
+	Yes (bearish)
+	65–75%
+	Disagreement disclosure detection
+	S034
+	Customer/Supplier Concentration
+	F08
+	Not built
+	Ambiguous
+	45–55%
+	10-K NLP; low priority
+	S035
+	Borrow Rate Spikes
+	F06
+	BLOCKED
+	Yes (bearish)
+	60–70%
+	IBKR API key
+	S036
+	Fail-to-Deliver Patterns
+	F06
+	Active
+	Partial
+	45–55%
+	Reg SHO threshold tracker
+	S037
+	ADR/Ordinary Divergence
+	F18
+	Active, scorer missing
+	Yes
+	55–65%
+	Add scorer entry (quick win)
+	S038
+	Convertible Bond vs. Equity
+	F19
+	Not built
+	Yes
+	60–70%
+	F19 family build (strategic)
+	S039
+	Sector vs. Single-Stock Divergence
+	F18
+	Active (crude)
+	Yes
+	55–65%
+	Tempo multi-lens cohort baselines
+	S040
+	Lock-Up Expiration Anticipation
+	F12
+	Active
+	Yes
+	50–58%
+	Lock-up date accuracy
+	Key Observations, Batch 4
+S037 (ADR Spread) is the fastest win in the entire catalog. The collector works. It's generating signals (5 rows). The scorer doesn't consume them. Writing a scorer entry and assigning it to the cross_asset cluster would instantly strengthen F18, which currently has only two P-tier signals. This is a 30-minute code change that activates a production-grade signal in the thinnest family.
+S038 (Convertible Bond) is the most strategically important unbuilt signal. It's the entry point for F19 (Credit & Fixed Income), which has zero signals. Without F19, the cascade detector cannot identify CT-07 (Credit Distress), and the scoring engine is missing an entire independent institutional pathway. The academic evidence for credit-equity lead-lag is among the strongest in the literature (60–70% accuracy). Building F19 starting with convertible bond analysis is the highest-impact family activation available after fixing the FINRA/IBKR data blockers.
+The "rats leaving the ship" cluster is powerful. S030 (Auditor Change), S031 (Material Weakness), S032 (C-Suite Departure), S033 (Board Resignation) — these four signals form a coherent distress precursor package across F01, F02, F03, and F08. When they converge on a single company — auditor leaves, material weakness appears, CFO departs "for personal reasons," independent directors resign — the multi-family Agreement is overwhelming. This is CT-07 in its purest equity-observable form. Three of the four are already in the scorer or generating data. S030 (Auditor Change) and S031 (Material Weakness) are the unbuild gaps.
+S034 (Customer/Supplier Concentration) is the weakest signal in this batch. Directionally ambiguous, annual cadence, requires sophisticated NLP, 45–55% accuracy. It should be built only as a byproduct of a broader 10-K change detection system. On its own, not worth the investment.
+F18 (Cross-Asset Correlation) goes from 2 signals to 3 with a single scorer integration (S037). And S039 (Cohort Divergence) is already active in the scorer as cohort_performance — it's just in the wrong cluster (alternative instead of cross_asset). Reclassifying it plus adding S037 gives F18 four signals (two production, two probationary), which is enough to be a genuine contributing family.
+________________
+
+
+Ready for Batch 5: Signals S041–S050 (Crypto Brainstorm 41–50)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL

@@ -1,0 +1,415 @@
+﻿SignalDelta Master Signal Catalog
+Batch 2: Signals S011–S020
+Version 1.0 DRAFT | February 7, 2026
+________________
+
+
+S011: Social Media Influencer Pre-Positioning
+Field
+	Value
+	Family
+	F10: Social & Influencer Coordination
+	Cascade Hint
+	S4 (Narrative Formation) primary — the content is the narrative; S3 (Capital Commitment) secondary — the pre-positioning is capital commitment
+	Chain Affinity
+	CT-10 (Pump-and-Dump), CT-05 (Crypto Rug Pull)
+	Original Ref
+	Signal_Collectors_1, Signal 11
+	Scorer Mapping
+	influencer_positioning (E tier, 0.75x, 72h half-life, alternative cluster)
+	Collection Status
+	Partial — Twitter API via TWITTER_API_KEY, LunarCrush for crypto social. On-chain wallet-to-influencer identity linking is the hard part.
+	Directional
+	Yes — position direction + content sentiment both observable
+	Estimated Accuracy
+	45–55%. The signal concept is strong but instrumentation is weak. Wallet-to-identity linking requires manual curation or Arkham/Nansen label databases, which are incomplete. For known influencer wallets the accuracy is likely 60–70% (influencers who front-run their content profit systematically), but coverage is thin.
+	Useful For:
+* CT-10 (Pump-and-Dump) diagnostic — influencer pre-positioning is the mechanism of manufactured cascades. The position→content→price→exit sequence is the textbook pump-and-dump workflow
+* Cross-family Agreement: if influencer positioning (F10) aligns with options flow (F04) or dark pool (F05), the convergence is informative. If influencer positioning contradicts institutional flow, that divergence is a CT-10 tell — the retail-facing narrative opposes the institutional direction
+* Crypto brainstorm Signal 49 (future S049) extends this concept with more granular wallet-to-content timing analysis
+Validity Notes: The concept is unambiguously valid. Research from academic finance (Cookson et al. 2023) and SEC enforcement actions confirm that influencer front-running is systematic and profitable for the influencer. The problem isn't conceptual — it's operational. Linking wallets to identities is an imperfect, manual, and constantly evolving challenge. The signal is correctly placed at E tier (0.75x) in the scorer, reflecting the data quality limitation rather than the conceptual weakness.
+One assumption to challenge: the brainstorm frames this as detecting bad actors. From a scoring perspective, we don't care about the ethics — we care about the behavioral pattern. An influencer who consistently buys before posting and sells after is generating a detectable, directional signal regardless of whether it's unethical. The IALD Score measures the behavioral anomaly, not the moral character.
+What's Missing: The wallet-to-influencer identity database. This is a persistent challenge across crypto signals. Arkham Intelligence offers the best commercially available wallet labeling, but coverage is incomplete and biased toward large accounts. A curated internal list of top 50–100 crypto influencer wallets would cover the highest-impact accounts. For equities, 13F/13G disclosures provide partial influencer positioning data but with 45-day lag that largely destroys the signal.
+________________
+
+
+S012: Narrative Velocity Acceleration
+Field
+	Value
+	Family
+	F09: Narrative & Media Propagation
+	Cascade Hint
+	S4 (Narrative Formation) primary
+	Chain Affinity
+	CT-04 (Media Leak) primary, CT-01 (Regulatory) secondary, CT-10 (Pump-and-Dump) secondary
+	Original Ref
+	Signal_Collectors_1, Signal 12
+	Scorer Mapping
+	narrative_velocity (E tier, 0.75x, 48h half-life, alternative cluster), news_sentiment (E tier, 0.80x), google_trends_spike (E tier, 0.70x), reddit_sentiment (E tier, 0.75x), social_metrics (E tier, 0.75x), social_momentum_strong (D tier, decomposed from social_metrics)
+	Collection Status
+	Partial — NewsAPI working (21,167 news items), Twitter API, LunarCrush, Google Trends. Raw data exists but signal generation from narrative velocity (rate-of-change of coverage, not just sentiment) is underdeveloped.
+	Directional
+	Partially — sentiment can indicate direction, but velocity alone is non-directional (narrative can accelerate on both positive and negative information)
+	Estimated Accuracy
+	45–55%. Individual narrative signals are weak. The velocity concept (rate-of-change of mentions, not absolute sentiment) is more defensible than raw sentiment analysis. Narrative that precedes price movement is genuinely informative (H4, Narrative-Price Coupling Inversion). Narrative that follows price is just journalism. The temporal ordering is the key variable, and it's hard to measure precisely.
+	Useful For:
+* CT-04 (Media Leak) is the primary diagnostic. If narrative accelerates before any S1, S2, or S3 evidence, information likely leaked directly to a journalist, bypassing all market infrastructure. This is the inverse of normal information flow and highly diagnostic.
+* Cascade sequencing: when combined with other families, the timing of narrative relative to capital commitment tells you the cascade direction. If options flow (F04) fires before narrative (F09), information entered through market channels. If narrative fires before options, information entered through media channels. The sequence is the diagnostic, not the individual signals.
+* CT-10 (Pump-and-Dump): manufactured narrative acceleration (coordinated social posts) preceding retail inflow is a pump-and-dump signature. The velocity profile is different from organic viral — manufactured velocity has a sharper onset and involves coordinated accounts.
+Validity Notes: This is conceptually one of the most important signals in the system because it carries cascade sequencing information. But it's also one of the hardest to instrument well. The scorer currently has 6 sub-signals touching narrative/media/social, all at E tier (0.70–0.80x). That's appropriate given current data quality.
+The fundamental challenge: distinguishing narrative-first (informative) from narrative-responsive (journalistic). This requires precise timestamping of both narrative events and market events, and the public data pipeline has latency that muddies the temporal ordering. A narrative that appears to precede a price move by 2 hours may actually have been published after the price move if the price move happened in dark pools before hitting the public tape.
+The v1 scorer lumps all these signals into the alternative correlation cluster, which is the junk drawer. The 20-family taxonomy fixes this: narrative signals (F09) are now separate from social signals (F10), which is correct because they traverse different institutional pathways (journalist intermediaries vs. direct-to-audience).
+What's Missing: A proper narrative velocity metric. Current collection tracks existence of news items (21,167 rows) but not acceleration (rate-of-change of article publication frequency per security). A time-series derivative of article count would be the correct implementation. Also missing: source quality weighting (Bloomberg article vs. random blog post should carry different weights).
+________________
+
+
+S013: Unusual After-Hours/Pre-Market Activity
+Field
+	Value
+	Family
+	F04: Options Market Structure (when options-driven) / F05: Dark Pool (when block-driven) — in practice, straddles families
+	Cascade Hint
+	S3 (Capital Commitment)
+	Chain Affinity
+	CT-02 (Insider), CT-04 (Media Leak — after-hours reaction to leaked info)
+	Original Ref
+	Signal_Collectors_1, Signal 13
+	Scorer Mapping
+	afterhours_anomaly (C tier, 1.10x, 24h half-life, trading cluster)
+	Collection Status
+	Active — Polygon provides extended-hours data
+	Directional
+	Yes — direction of price move is observable
+	Estimated Accuracy
+	50–60%. After-hours moves without news followed by next-day news are well-documented in SEC enforcement data. But the false positive rate is high because extended-hours markets are illiquid and noisy. A 2% after-hours move in a mid-cap stock could be a single block trade from a non-informed institutional rebalance. The signal improves substantially when combined with next-day news validation — but by then the detection window is closing.
+	Useful For:
+* CT-02 (Insider) detection — insiders who can't wait for regular hours because news is imminent. The short half-life (24h) is correct: this signal is acute.
+* Earnings pre-announcement: companies that release 8-Ks after market close create an after-hours signal that is informationally legitimate (the 8-K is public) but temporally asymmetric (only those monitoring after-hours feeds react). Not an IALD signal per se, but contributes to the baseline calibration problem.
+* ADR cross-listing: an after-hours move in a US-listed ADR may reflect news in the home market that hasn't been disseminated in English. This is information asymmetry through language barriers, not insider knowledge — conceptually valid but operationally different.
+Validity Notes: The signal is correctly placed at C tier (1.10x). The concept is valid — extended hours are lower-liquidity, higher-information environments where informed actors can move price more easily. But the 24-hour half-life means this signal decays fast, which is appropriate: if an after-hours move isn't followed by confirming news within a day, it's more likely noise.
+The trading correlation cluster placement is reasonable but imperfect. After-hours activity doesn't cluster with any other signal type cleanly. In the 20-family taxonomy, this signal doesn't map to a single family because the mechanism varies: could be options exercise after hours (F04), could be dark pool block (F05), could be price action on thin book (not clearly any family). I've placed it in F04 tentatively — the family assignment should be reviewed during calibration.
+What's Missing: Cross-reference with news timestamps. The signal fires on the move, but the validation (did news follow?) requires a news-to-price temporal matching pipeline that doesn't currently exist as a formal structure. This is a Tempo integration point — Tempo should flag "after-hours anomaly with no corresponding news event" as a distinct state.
+________________
+
+
+S014: Congressional Trading Disclosure Patterns
+Field
+	Value
+	Family
+	F02: Governance & Political Intelligence
+	Cascade Hint
+	S1 (Institutional Process) primary — the disclosure filing is the institutional record; S0 (Private Cognition) secondary — the trade itself may reflect private knowledge from committee briefings
+	Chain Affinity
+	CT-01 (Regulatory Cascade), CT-02 (Insider — political variant)
+	Original Ref
+	Signal_Collectors_1, Signal 14
+	Scorer Mapping
+	congressional_committee_chair (S tier, 1.65x), congressional_informed (A tier, 1.50x), congressional_relevant_committee (A tier, 1.50x), congressional (A tier, 1.50x), congressional_patterns (A tier, 1.40x), congressional_unusual_timing (B tier, 1.35x), congressional_amount_outlier (C tier, 1.15x), congressional_spouse_trade (P tier, 0.60x), congressional_bipartisan_cluster (P tier, 0.65x)
+	Collection Status
+	Active — Capitol Trades (111 congressional trades), QuiverQuant, House/Senate disclosures. 16 pattern signals generated.
+	Directional
+	Yes — buy vs. sell, and committee jurisdiction provides contextual direction
+	Estimated Accuracy
+	60–75%. This is one of the strongest signals in the system, supported by substantial academic and journalistic evidence. Eggers and Hainmueller (2014) found congressional portfolios outperformed the market by 6% annually. The committee chair sub-signal (congressional_committee_chair, S tier at 1.65x) is the single highest-weighted governance signal because committee chairs have the most direct access to regulatory and legislative outcomes.
+	Useful For:
+* This is the crown jewel of F02 (Governance & Political Intelligence) — the family with the most signals (23) and the most differentiated IP in the system
+* CT-01 (Regulatory Cascade): when a committee chair trades a stock under their jurisdiction and a regulatory action follows, the full S0→S1→S2→S3→S4→S5 cascade is detectable
+* The decomposition into 9 sub-signals is the second-most granular in the system (after Form 4 with 12). Each variant captures a different informational dimension:
+   * Committee chair (S tier): highest information access
+   * Relevant committee (A tier): member of committee with jurisdiction over the security's sector
+   * Informed trade (A tier): trade in sector under active legislative consideration
+   * Unusual timing (B tier): trade outside the member's normal pattern
+   * Amount outlier (C tier): trade larger than member's typical transaction
+   * Spouse trade (P tier): concealment mechanism — harder to detect, probationary until accuracy established
+   * Bipartisan cluster (P tier): members from both parties trading same security same direction — extremely diagnostic when it occurs, but rare
+* Bipartisan clustering deserves elevation from P tier once sufficient instances accumulate. When a Democrat and Republican on the same committee both buy the same stock the same week, the probability of coincidence is vanishingly low.
+Validity Notes: Rock solid. Congressional trading advantage is well-documented in academic literature, journalistic investigations (Unusual Whales, Capitol Trades), and SEC/DOJ enforcement. The STOCK Act (2012) requires disclosure but hasn't eliminated the advantage — it just made it observable, which is precisely what IALD exploits.
+The 168-hour half-life (1 week) is appropriate for a signal with high latency. Congressional disclosures can be filed up to 45 days after the trade, which means the information is stale by the time it's public. But the pattern — looking at a member's history of trading before committee actions — accumulates evidence over time, making the half-life less relevant than the pattern persistence.
+One validity concern to flag: the STOCK Act is periodically targeted for amendment. If a future ban on congressional trading passes, this signal family loses its core data source. Not an immediate risk, but a strategic dependency worth noting.
+What's Missing: 111 trades is a small dataset. Coverage depends on the disclosure filing cadence and Capitol Trades' collection completeness. QuiverQuant provides supplementary data (lobbying, patents, government contracts) but the congressional trading component may have gaps. Enrichment opportunity: cross-reference congressional trades with committee hearing schedules (Federal Register) and bill markup dates to detect trades that precede specific legislative actions by narrow windows.
+________________
+
+
+S015: Lobbying Expenditure Spikes
+Field
+	Value
+	Family
+	F02: Governance & Political Intelligence
+	Cascade Hint
+	S1 (Institutional Process) — lobbying is an institutional workflow response to anticipated regulatory action
+	Chain Affinity
+	CT-01 (Regulatory Cascade)
+	Original Ref
+	Signal_Collectors_1, Signal 15
+	Scorer Mapping
+	lobbying_spikes (C tier, 1.00x, 168h half-life, governance cluster), lobbyist_position_change (P tier, 0.55x)
+	Collection Status
+	Partial — OpenSecrets data accessed via QuiverQuant. Quarterly filing cadence creates inherent latency.
+	Directional
+	No — a lobbying spike tells you something is happening in the regulatory domain but not whether the outcome is positive or negative for the stock. Companies lobby both offensively (seeking favorable regulation) and defensively (opposing unfavorable regulation).
+	Estimated Accuracy
+	45–55%. The concept is valid: companies don't increase lobbying spend without reason. But the signal is inherently slow (quarterly disclosure), low-resolution (dollar amounts without specific policy targets in aggregated data), and non-directional. The quarter-over-quarter change threshold (>50%) is reasonable but noisy — lobbying spend is lumpy (new contracts, firm changes) in ways unrelated to specific policy events.
+	Useful For:
+* CT-01 (Regulatory Cascade) corroboration — if congressional trading (S014) and lobbying spikes (S015) coincide for the same company/sector, the convergence is compelling. Two sub-signals within F02 aren't independent (same family), but the mechanisms are different enough (politicians trading vs. companies spending on influence) that the convergence adds intra-family conviction.
+* Long-lead indicator: lobbying spikes operate on a 3–6 month horizon, well outside the 8–72 hour detection window. This is an F02 context signal, not a trigger — it creates the baseline awareness that regulatory action is being prepared, which then primes the scoring engine to weight subsequent short-term signals (congressional trades, filing tempo changes) more heavily.
+* The lobbyist_position_change sub-signal (P tier, 0.55x) is more interesting conceptually: when a company hires a new lobbying firm with specific regulatory expertise (e.g., hiring a firm known for antitrust defense), the type of lobbyist reveals the type of expected action.
+Validity Notes: This is appropriately a C-tier signal. The concept is real, but the instrumentation is weak for near-term IALD detection. Quarterly cadence means you can't detect a lobbying spike until up to 90 days after the spending occurred. By that point, the regulatory action may have already happened.
+The signal's primary value is contextual, not acute. It belongs in Tempo's environmental awareness layer rather than in the near-term scoring pipeline. A company that has been ramping lobbying spend for two consecutive quarters creates a Tempo context flag that says "regulatory activity expected" — which should lower the surprise threshold for subsequent S014 (congressional) or S003/S004 (options) signals on that name.
+What's Missing: More granular lobbying data. The aggregated quarterly filings tell you how much was spent, but the specific policy targets require parsing the LD-2 disclosure forms (available from Senate.gov). QuiverQuant may provide partial parsing. The real enhancement is NLP on lobbying disclosure content to identify what the company is lobbying about — which would make this signal directional.
+________________
+
+
+S016: Patent Filing Timing Relative to Stock Transactions
+Field
+	Value
+	Family
+	F01: Corporate Insider Behavior (the insider trade aspect) + F03: Litigation & Enforcement (the patent litigation aspect)
+	Cascade Hint
+	S1 (Institutional Process) — patent grants and litigation decisions are institutional process outputs
+	Chain Affinity
+	CT-02 (Insider)
+	Original Ref
+	Signal_Collectors_1, Signal 16
+	Scorer Mapping
+	patent_timing (C tier, 1.00x, 168h half-life, filings cluster), patent_citation_velocity (P tier, 0.50x, 336h half-life)
+	Collection Status
+	Active — USPTO data, but signal generation appears thin.
+	Directional
+	Partially — patent grant is generally positive; patent litigation outcome depends on whether the company is plaintiff or defendant
+	Estimated Accuracy
+	45–55%. The concept is valid for companies where patent portfolios are a material portion of value (pharma, tech, semiconductors). For diversified companies, individual patent events rarely move stock materially, making the insider trade timing correlation noise. The patent citation velocity sub-signal (P tier, 0.50x) is more speculative — it measures how often a company's patents are being cited by other companies' filings, which might indicate the technology is becoming strategically important.
+	Useful For:
+* Narrow applicability: primarily pharma/biotech (where a single patent covers a blockbuster drug) and semiconductor/tech (where patent portfolios underpin licensing revenue)
+* Cross-reference with S006 (Form 4 timing): insider purchases within 30 days before a patent grant, when the insider could have known the examiner's response, is genuinely informative in the right sector context
+* Patent citation velocity is a long-lead research signal: if other companies are suddenly citing your patents, it may indicate an emerging standard or licensing opportunity. This is more "fundamental research" than IALD detection — it operates on a months-to-quarters timescale
+* The filings cluster placement is correct: patent filings are institutional process documents, and timing anomalies in their relationship to insider trades are filing-based signals
+Validity Notes: Valid but narrow. The assumption that insiders time trades around patent events is supported by case law (SEC has brought cases on exactly this theory) and academic evidence for pharma specifically. But the applicability is limited to patent-dependent industries, which means the signal fires infrequently and only on a subset of the coverage universe.
+At C tier (1.00x) and P tier (0.50x), the scorer assigns appropriate weight: not zero (the concept is real) but not high (the data is thin and the applicability narrow).
+What's Missing: Industry-specific applicability filtering. This signal should receive zero weight for companies where patent portfolios are immaterial (financials, utilities, retail). The Tempo per-security context should include a "patent materiality" flag based on whether the company has disclosed patent-dependent revenue in its filings.
+________________
+
+
+S017: M&A Rumor-to-Announcement Price Efficiency
+Field
+	Value
+	Family
+	F04: Options Market Structure (the options flow dimension) + F05: Dark Pool (the accumulation dimension)
+	Cascade Hint
+	S3 (Capital Commitment) primary — the leakage ratio measures the degree of pre-announcement capital commitment
+	Chain Affinity
+	CT-03 (Deal Leakage) — this signal IS the CT-03 diagnostic metric
+	Original Ref
+	Signal_Collectors_1, Signal 17
+	Scorer Mapping
+	ma_leakage (S tier, 1.65x, 168h half-life, governance cluster)
+	Collection Status
+	Active but event-dependent — M&A announcements are infrequent. Signal fires only when a deal is announced and retrospective analysis detects pre-announcement leakage.
+	Directional
+	Yes — leakage direction is definitionally in the deal direction (target stock appreciating toward deal price)
+	Estimated Accuracy
+	65–75%. This is one of the highest-accuracy signals because it's measured retrospectively — you know the deal happened, and you're measuring how much price movement preceded the announcement. Academic evidence (Meulbroek 1992, Augustin et al. 2019) consistently finds 40–60% of deal premium is captured pre-announcement across the full M&A population, with higher leakage for larger deals and deals involving more intermediaries.
+	Useful For:
+* CT-03 (Deal Leakage) is this signal's primary cascade chain type. The leakage ratio quantifies the degree to which information escaped containment before announcement.
+* Retrospective calibration tool: this signal is more useful for validating the scoring system than for triggering it. If IALD detects high Magnitude + bullish Lean + high Agreement on a security, and then a deal is announced, the leakage ratio retroactively measures how well the scoring system detected the leakage.
+* Prospective use: while the leakage ratio can only be calculated after announcement, the component signals that contribute to leakage (options flow, dark pool prints, unusual volume) are detectable in real-time. M&A leakage is actually a composite outcome of S003, S004, S005, and S006 converging.
+* The S tier placement (1.65x) at the scorer level reflects the fact that when this signal fires, it fires with high confidence — but it fires rarely and retrospectively.
+Validity Notes: The concept is among the most validated in the IALD framework. The SEC's own enforcement data shows M&A leakage detection is their primary insider trading case generator. The question isn't whether leakage happens (it does, systematically) but whether the scoring system can detect it in real-time before the announcement. The leakage ratio measures the retrospective ground truth; the scoring system's job is to approximate it in advance.
+The governance cluster placement in the scorer is wrong. M&A leakage is not a governance signal — it's a capital commitment signal that aggregates evidence from options (F04), dark pools (F05), and insider behavior (F01). In the 20-family taxonomy, this signal doesn't belong to a single family: it's a composite diagnostic that the Cascade detector produces by observing convergence across families. It might be better implemented as a cascade chain type metric (CT-03 match probability) rather than as an individual signal.
+What's Missing: A real-time M&A rumor tracker. The current implementation fires retrospectively on announced deals. A prospective variant would monitor for the component signals of CT-03 (options + dark pool + insider cluster without public catalyst) and flag "potential deal leakage" before the announcement. This is essentially what the cascade chain type detector would produce — meaning S017 may evolve from a discrete signal into a cascade output.
+________________
+
+
+S018: Crypto Exchange Inflow/Outflow Anomalies
+Field
+	Value
+	Family
+	F14: Crypto: On-Chain Capital Flow
+	Cascade Hint
+	S3 (Capital Commitment) primary
+	Chain Affinity
+	CT-05 (Crypto Rug Pull), CT-06 (Earnings/Catalyst Anticipation — crypto equivalent: listing, delisting, regulatory)
+	Original Ref
+	Signal_Collectors_1, Signal 18
+	Scorer Mapping
+	exchange_flow (C tier, 1.05x, 48h half-life, exchange_crypto cluster), exchange_whale_deposit (D tier, decomposed from exchange_flow), exchange_whale_withdrawal (D tier, decomposed from exchange_flow)
+	Collection Status
+	Active but errors — collector flagged in SIGNAL_COVERAGE.md as needing fix. DeFi Llama, Arkham data sources. Raw whale_transactions table has 23,002 rows. Signal generation is broken.
+	Directional
+	Yes — inflows to CEX are bearish (selling intent), outflows from CEX are bullish (accumulation/self-custody)
+	Estimated Accuracy
+	50–60%. Exchange flow as a directional signal is well-established in crypto analytics (CryptoQuant's "exchange net flow" is one of the most-cited on-chain metrics). Large inflows preceding dumps and large outflows preceding rallies is a consistent pattern, but the false positive rate is meaningful: exchange flows also include market making, yield farming rotation, cold storage management, and OTC settlement — all non-informational. Whale-level flows (>$1M) are more informative than aggregate flows.
+	Useful For:
+* CT-05 (Crypto Rug Pull) — team wallet transferring tokens to exchange is the canonical pre-rug-pull signal. Exchange deposit from a labeled team wallet is the highest-confidence variant
+* Whale deposit/withdrawal decomposition is correct: whale deposits are bearish (preparing to sell), whale withdrawals are bullish (taking to self-custody). The direction is more reliable at whale scale than at aggregate level
+* The exchange_crypto cluster is the right correlation cluster — exchange flows are correlated with each other but independent from on-chain project operations (F15) and social coordination (F16)
+* This is the entry point signal for the Collector_Plan's Signal 66 (Exchange Inflow Spike), which proposed a more granular collector specifically tracking transfers >1% of circulating supply from team/whale wallets to CEX addresses
+Validity Notes: Conceptually sound, operationally impaired. The signal generation pipeline is broken per SIGNAL_COVERAGE.md — the collector has errors despite having 23,002 raw whale transaction rows. Fixing this collector is flagged as an immediate action item.
+The accuracy estimate assumes the collector is fixed and generating signals properly. Current accuracy is effectively 0% because no signals are being generated despite available data. This is the highest-impact crypto signal fix available.
+One validity nuance: the interpretation of exchange inflows has shifted since DeFi matured. In 2020, exchange inflow mostly meant "selling." In 2025–2026, exchange inflow can also mean "depositing collateral for leveraged positions" (bullish, not bearish) or "providing liquidity on CEX-integrated DeFi" (neutral). The directional interpretation needs to account for the destination within the exchange ecosystem, not just the fact of deposit.
+What's Missing:
+1. Fix the collector. This is the #1 crypto action item.
+2. CEX hot wallet address database. Maintaining a current list of exchange deposit addresses across Binance, Coinbase, Kraken, OKX, etc. is a persistent challenge. Arkham and Nansen provide labeling, but coverage varies by chain and exchange.
+3. Team wallet labeling. Distinguishing "team wallet → exchange" (rug pull signal) from "random whale → exchange" (ambiguous) requires labeled team wallets. The CoinGecko mappings collector provides project metadata; cross-referencing with Arkham labels would complete the picture.
+________________
+
+
+S019: Earnings Call Linguistic Pattern Deviation
+Field
+	Value
+	Family
+	F08: Disclosure & Filing Tempo
+	Cascade Hint
+	S1 (Institutional Process) — the earnings call is an institutional disclosure event; S0 (Private Cognition) weak — linguistic stress may leak private cognitive state
+	Chain Affinity
+	CT-06 (Earnings Anticipation), CT-07 (Credit Distress — management concealment of deteriorating fundamentals)
+	Original Ref
+	Signal_Collectors_1, Signal 19
+	Scorer Mapping
+	linguistic_deviation (E tier, 0.80x, 120h half-life, filings cluster), linguistic_bearish (directional variant in bearish signals set)
+	Collection Status
+	Active — transcript sources available, NLP processing in place
+	Directional
+	Partially — increased hedging language and topic avoidance tend to precede negative outcomes (bearish), but increased certainty language preceding positive outcomes is a weaker signal
+	Estimated Accuracy
+	45–55%. The academic evidence is mixed. Loughran and McDonald (2011) established that financial text sentiment has predictive value. Li (2008) found that readability changes in 10-K filings predict future performance. But the effect sizes are small, and the NLP methodology is still evolving. LLM-based approaches may improve accuracy over traditional dictionary-based methods, but haven't been validated at scale for this specific application.
+	Useful For:
+* CT-07 (Credit Distress) detection — management concealment under stress produces measurable linguistic changes. Increased use of hedging language ("we believe," "we expect," "subject to"), decreased use of certainty markers ("we will," "we are"), and topic avoidance (spending less time on previously emphasized metrics) are documented patterns preceding negative revelations.
+* Tempo baseline integration is critical: the signal is deviation from the company's own baseline, not absolute linguistic features. A CEO who always hedges has a different baseline than one who speaks with certainty. The deviation is informative; the absolute style is not.
+* Long half-life (120h / 5 days) is appropriate because earnings calls happen quarterly and the linguistic deviation persists as a flag until the next call or a resolution event.
+* Family placement in F08 (Disclosure & Filing Tempo) rather than F09 (Narrative) is deliberate: the earnings call is a corporate disclosure, not a media narrative. The company is the author, not a journalist.
+Validity Notes: The concept is valid — humans leak information through language, and management under stress exhibits detectable behavioral changes. But the practical accuracy is modest because:
+1. Management is increasingly media-trained, which attenuates the signal over time
+2. NLP on earnings call transcripts is a well-studied field, meaning any edge from basic sentiment analysis is likely competed away
+3. The signal operates on a quarterly cadence with a long horizon (90 days to next confirmation), which is outside the 8–72 hour IALD window
+The E tier placement (0.80x) is appropriate. This is a context signal, not a trigger. It adds marginal conviction to scores already elevated by more acute signals (options flow, insider trades).
+What's Missing: LLM-based linguistic analysis would likely outperform dictionary-based NLP for this application. Running transcripts through a local model (Qwen on the GMKtec, for example) with a prompt designed to detect hedging, evasion, and topic avoidance could produce richer features than word-frequency analysis. But this introduces latency and compute cost that may not be justified given the signal's modest standalone accuracy.
+________________
+
+
+S020: Prediction Market Liquidity Provider Behavior Change
+Field
+	Value
+	Family
+	F17: Prediction & Belief Markets
+	Cascade Hint
+	S2 (Infrastructure Response) — the LP is market infrastructure; their behavioral change IS the infrastructure response
+	Chain Affinity
+	CT-01 (Regulatory — LP withdrawing before known outcome), CT-02 (Insider — LP detecting informed flow)
+	Original Ref
+	Signal_Collectors_1, Signal 20
+	Scorer Mapping
+	prediction_lp (C tier, 1.05x, 48h half-life, prediction cluster)
+	Collection Status
+	Partial — Polymarket order book data accessible via API. LP behavior tracking requires position-level monitoring of known LP wallets, which is partially implemented via Kalshi API.
+	Directional
+	Not directly — LP withdrawal is a meta-signal indicating informed flow exists, but the direction of the informed flow isn't revealed by the withdrawal itself. However, asymmetric withdrawal (bid depth shrinks more than ask depth) leaks directional information: the LP expects sellers.
+	Estimated Accuracy
+	50–60%. Market microstructure theory strongly supports this: LPs widen spreads and withdraw depth when they detect adverse selection (Glosten and Milgrom 1985, Kyle 1985). This is one of the most robust findings in market microstructure. The practical challenge is observing LP behavior with sufficient granularity on prediction markets, where order books are less transparent than equities.
+	Useful For:
+* This is an S2 (Infrastructure Response) signal in the F17 family, which otherwise mostly provides S3 evidence. LP behavior change tells you the market infrastructure is adapting to perceived informed flow, which is a fundamentally different kind of evidence than the flow itself.
+* CT-01 (Regulatory) and CT-02 (Insider): the LP withdrawal pattern is a second-order signal. The LP isn't the informed actor — they're the counterparty who detects the informed actor. This meta-layer is valuable because it's independent of the information channel: the LP doesn't know what the informed actor knows, only that the flow pattern looks informed.
+* Asymmetric depth change is the key enhancement: if bid depth shrinks faster than ask depth, the LP expects downward pressure (bearish informed flow). This makes the signal directional even though the LP withdrawal itself isn't.
+* Pairs well with S001 (new account concentration) and S002 (probability divergence) — all three are F17 signals, so they contribute to intra-family conviction. An S002 divergence + S020 LP withdrawal + S001 new accounts on the same Polymarket event is a strong F17 family signal.
+Validity Notes: Theoretically one of the strongest signals in the batch — grounded in Nobel-caliber market microstructure research. The LP adverse selection response is a universal mechanism: it operates identically on equities, prediction markets, and crypto DEXs. The challenge is purely operational: can we observe LP behavior with enough granularity on the platforms we monitor?
+On Polymarket (CLOB model), order book depth is observable. On Kalshi, less so. On crypto DEXs (AMM model), "LP behavior" manifests differently — liquidity is added/removed from pools rather than order books, and the analytics are less mature.
+C tier (1.05x) is probably a tier too low. If the instrumentation were better, this signal's theoretical accuracy supports B tier (1.20–1.35x). The current tier reflects data quality, not conceptual strength. A future promotion pathway is warranted once LP tracking matures.
+What's Missing:
+1. Position-level LP tracking on Polymarket. Need to identify LP wallets and monitor their depth contributions over time, not just observe aggregate spread width.
+2. Asymmetric depth change computation. The current implementation may track aggregate spread width but not bid/ask asymmetry.
+3. Cross-platform comparison. If Polymarket LPs withdraw but Kalshi LPs don't (or vice versa), the divergence between platforms on the same event is itself informative.
+________________
+
+
+Batch 2 Summary
+ID
+	Name
+	Family
+	Status
+	Directional
+	Est. Accuracy
+	Priority Gap
+	S011
+	Influencer Pre-Positioning
+	F10
+	Partial
+	Yes
+	45–55%
+	Wallet-to-identity DB
+	S012
+	Narrative Velocity Acceleration
+	F09
+	Partial
+	Partial
+	45–55%
+	Velocity metric (rate-of-change)
+	S013
+	After-Hours/Pre-Market Activity
+	F04*
+	Active
+	Yes
+	50–60%
+	News timestamp cross-ref
+	S014
+	Congressional Trading Patterns
+	F02
+	Active ✓
+	Yes
+	60–75%
+	Dataset growth
+	S015
+	Lobbying Expenditure Spikes
+	F02
+	Partial
+	No
+	45–55%
+	LD-2 content parsing
+	S016
+	Patent Filing vs. Insider Trades
+	F01/F03
+	Active (thin)
+	Partial
+	45–55%
+	Industry applicability filter
+	S017
+	M&A Leakage Ratio
+	F04/F05
+	Active (event-dep)
+	Yes
+	65–75%
+	Real-time rumor tracker
+	S018
+	Crypto Exchange Inflow/Outflow
+	F14
+	BROKEN
+	Yes
+	50–60%
+	Fix collector
+	S019
+	Earnings Call Linguistic Deviation
+	F08
+	Active
+	Partial
+	45–55%
+	LLM-based analysis
+	S020
+	Prediction Market LP Behavior
+	F17
+	Partial
+	No (meta)
+	50–60%
+	LP position tracking
+	*S013 family assignment is tentative — straddles F04/F05, needs calibration review
+Key Observations, Batch 2
+S014 (Congressional Trading) is the second crown jewel after S006 (Form 4). Nine sub-signals, S-through-P tier coverage, the most granular governance decomposition in the system. F02 alone has 23 signals, and congressional trading is the backbone. The bipartisan cluster sub-signal deserves fast-tracking out of P tier — it's conceptually one of the strongest signals in the entire catalog but needs more instances.
+S018 (Exchange Flow) is the highest-impact crypto fix. 23,002 raw whale transactions sitting in the database generating zero signals because the collector is broken. This is the crypto equivalent of the FINRA blocker — the data exists, the scorer logic exists, the pipeline is just disconnected.
+S017 (M&A Leakage) is misarchitected as an individual signal. It's really a cascade chain type metric (CT-03 match probability) that should be computed by the cascade detector, not the signal scorer. It doesn't belong to a single family because it aggregates evidence across F01, F04, and F05. This is a scoring architecture insight that should feed back into the Scoring Foundation document — some "signals" in the v1 brainstorm are actually cascade-level diagnostics.
+The narrative/social layer (S011, S012) is the weakest part of the system. Five signals across F09 and F10, all at E tier (0.70–0.80x). The concepts are valid — narrative velocity and influencer pre-positioning are real phenomena — but the instrumentation is immature. These families will remain thin until the wallet-to-identity database and the narrative velocity metric (rate-of-change, not just count) are built.
+Three signals in this batch are non-directional (S015, S019, S020). They contribute to Magnitude but not to Lean. This is correct and important — they tell you something is happening without telling you which way. The scoring formula handles this correctly: they increase the score's distance from 50 when combined with directional signals, but can't move it alone.
+________________
+
+
+Ready for Batch 3: Signals S021–S030 (Equities Brainstorm 21–30)
+________________
+
+
+DRAFT — February 2026 — SignalDelta • signaldelta.io Classification: CONFIDENTIAL
